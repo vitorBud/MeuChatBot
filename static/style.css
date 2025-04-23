@@ -1,0 +1,97 @@
+* {
+  box-sizing: border-box;
+  font-family: 'Inter', sans-serif;
+}
+
+body {
+  background: linear-gradient(to right, #1f1c2c, #928dab);
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100vh;
+  padding: 20px;
+  color: white;
+}
+
+h1 {
+  margin-bottom: 20px;
+}
+
+#chat {
+  width: 100%;
+  max-width: 600px;
+  background-color: #ffffff11;
+  backdrop-filter: blur(10px);
+  border-radius: 16px;
+  padding: 20px;
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mensagem {
+  background-color: #ffffff22;
+  padding: 10px 15px;
+  border-radius: 10px;
+  max-width: 80%;
+  line-height: 1.4;
+}
+
+.bot {
+  align-self: flex-start;
+  background-color: #4e4eaa88;
+}
+
+.user {
+  align-self: flex-end;
+  background-color: #2ecc71aa;
+}
+
+#formulario {
+  display: flex;
+  margin-top: 20px;
+  width: 100%;
+  max-width: 600px;
+}
+
+#mensagem {
+  flex: 1;
+  padding: 12px;
+  border: none;
+  border-radius: 10px 0 0 10px;
+  outline: none;
+  font-size: 16px;
+}
+
+#enviar {
+  padding: 12px 20px;
+  border: none;
+  background-color: #4e4eaa;
+  color: white;
+  font-weight: bold;
+  border-radius: 0 10px 10px 0;
+  cursor: pointer;
+}
+
+#enviar:hover {
+  background-color: #3d3d91;
+}
+
+#limpar-chat {
+  margin-top: 10px;
+  padding: 10px 20px;
+  background-color: #e74c3c;
+  color: white;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: background 0.3s ease;
+}
+
+#limpar-chat:hover {
+  background-color: #c0392b;
+}

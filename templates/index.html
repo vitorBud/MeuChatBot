@@ -3,21 +3,40 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Chatbot Inteligente</title>
+  <title>Meu Chat IA</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-  <h1>Chat com IA</h1>
+  <div class="app">
 
-  <div id="chat"></div>
-  <button id="limpar-chat">🧹 Limpar Chat</button>
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <h2>MeuChatBot</h2>
+        <button id="novo-chat">+ Novo Chat</button>
+      </div>
+      <div class="chat-list">
+        <div class="chat-item active">Chat atual</div>
+        <!-- futuro: chats antigos -->
+      </div>
+    </aside>
 
+    <!-- Main -->
+    <main class="main">
+      <header class="main-header">
+        <h1>Chat com IA</h1>
+      </header>
 
-  <form id="formulario">
-    <input type="text" id="mensagem" placeholder="Digite sua pergunta..." autocomplete="off" />
-    <button type="submit" id="enviar">Enviar</button>
-  </form>
+      <div id="chat"></div>
+
+      <form id="formulario" class="input-area">
+        <input type="text" id="mensagem" placeholder="Digite sua pergunta..." autocomplete="off" />
+        <button type="submit" id="enviar">Enviar</button>
+      </form>
+    </main>
+
+  </div>
 
   <script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>

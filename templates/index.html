@@ -1,43 +1,85 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Meu Chat IA</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-  <div class="app">
+  <aside id="sidebar">
+    <div class="brand">MeuChat<span>IA</span></div>
 
-    <!-- Sidebar -->
-    <aside class="sidebar">
-      <div class="sidebar-header">
-        <h2>MeuChatBot</h2>
-        <button id="novo-chat">+ Novo Chat</button>
-      </div>
-      <div class="chat-list">
-        <div class="chat-item active">Chat atual</div>
-        <!-- futuro: chats antigos -->
-      </div>
-    </aside>
+    <button id="novo-chat" class="primary">+ Novo chat</button>
 
-    <!-- Main -->
-    <main class="main">
-      <header class="main-header">
-        <h1>Chat com IA</h1>
+    <nav class="nav">
+      <button class="nav-item active" data-view="chat-view">💬 Conversa</button>
+      <button class="nav-item" data-view="previsoes-view">📈 Previsões</button>
+    </nav>
+
+    <div class="threads">
+      <div class="threads-title">Seus chats</div>
+      <ul id="thread-list"></ul>
+    </div>
+  </aside>
+
+  <main id="main">
+    <!-- View: Chat -->
+    <section id="chat-view" class="view active">
+      <header class="topbar">
+        <h1>Buds Chat</h1>
+        <button id="limpar-chat" class="soft">Limpar</button>
       </header>
 
       <div id="chat"></div>
 
-      <form id="formulario" class="input-area">
-        <input type="text" id="mensagem" placeholder="Digite sua pergunta..." autocomplete="off" />
+      <form id="formulario" class="composer">
+        <textarea id="mensagem" placeholder="Digite sua pergunta..." rows="1"></textarea>
         <button type="submit" id="enviar">Enviar</button>
       </form>
-    </main>
+    </section>
 
+    <!-- View: Previsões -->
+    <section id="previsoes-view" class="view">
+  <header class="topbar">
+    <h1>Previsões (experimental)</h1>
+    <div class="actions">
+      <button id="pv-limpar" class="soft">Limpar</button>
+    </div>
+  </header>
+
+  <div class="previsoes-layout pv-with-sidebar">
+    <!-- Sidebar exclusiva de Previsões -->
+    <aside id="pv-sidebar" class="pv-sidebar">
+      <div class="pv-sb-head">
+        <div class="pv-sb-title">Painel de Previsões</div>
+        <button id="pv-novo" class="primary">+ Nova análise</button>
+      </div>
+
+      <div class="pv-sb-subtitle">Histórico</div>
+      <ul id="pv-historico" class="pv-historico"></ul>
+    </aside>
+
+    <!-- Chat das previsões -->
+    <div class="pv-chat">
+      <div id="pv-log" class="pv-log"></div>
+      <form id="pv-form" class="composer">
+        <input id="pv-tema" placeholder="Tema (ex.: IA no Brasil, petróleo, inflação…)" />
+        <button type="submit">Analisar</button>
+      </form>
+    </div>
+
+    <!-- Gráfico + artigos -->
+    <div class="pv-chart">
+      <canvas id="pv-canvas"></canvas>
+      <div id="pv-articles" class="pv-articles"></div>
+    </div>
   </div>
+</section>
 
   <script src="{{ url_for('static', filename='script.js') }}"></script>
+  <script src="{{ url_for('static', filename='previsoes.js') }}"></script>
 </body>
 </html>

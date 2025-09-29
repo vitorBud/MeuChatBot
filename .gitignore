@@ -1,0 +1,44 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+.eggs/
+dist/
+build/
+*.log
+
+# --- Testes/Cobertura ---
+.pytest_cache/
+.coverage
+htmlcov/
+
+# --- Virtual env ---
+venv/
+.venv/
+env/
+ENV/
+
+# --- Flask ---
+instance/
+*.db
+*.sqlite3
+
+# --- Segredos ---
+.env
+.env.*
+*.key
+*.pem
+
+# --- Front opcional ---
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# --- Editor/SO ---
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

@@ -1,303 +1,470 @@
-// ---------- Seletores ----------
-const chat = document.getElementById('chat');
-const formulario = document.getElementById('formulario');
-const mensagemInput = document.getElementById('mensagem');
-const enviarBtn = document.getElementById('enviar');
-const limparBtn = document.getElementById('limpar-chat');
+// ===== Previsões (somente lógica da view de previsões) =====
 
-const novoChatBtn = document.getElementById('novo-chat');
-const threadList = document.getElementById('thread-list');
-const navItems = document.querySelectorAll('.nav-item');
-
-const chatView = document.getElementById('chat-view');
-const previsoesView = document.getElementById('previsoes-view');
-
+// Seletores (mesmos do seu contrato)
 const pvForm = document.getElementById('pv-form');
 const pvTema = document.getElementById('pv-tema');
 const pvLog = document.getElementById('pv-log');
 const pvCanvas = document.getElementById('pv-canvas');
 const pvArticles = document.getElementById('pv-articles');
 
-// NOVOS elementos da sidebar de Previsões
-const pvLimparBtn = document.getElementById('pv-limpar');
-const pvNovoBtn = document.getElementById('pv-novo');
+const pvRangeBtns = document.querySelectorAll('.pv-range');
+const pvMM = document.getElementById('pv-mm');
+const pvExport = document.getElementById('pv-export');
+const pvLimpar = document.getElementById('pv-limpar');
+
 const pvHistorico = document.getElementById('pv-historico');
+const pvClearHistory = document.getElementById('pv-clear-history');
+
+const previsoesView = document.getElementById('previsoes-view');
 
 let pvChart = null;
+let PV_DAYS = 7; // default
+let currentSeries = []; // última série recebida (para export)
+let currentTema = '';
+let inFlight = null; // AbortController da requisição ativa
 
-// ---------- Estado / Threads ----------
-const state = {
-    threads: {},        // {id: {title, messages:[{role,text}], createdAt}}
-    currentId: null
-};
+// ===== A11y & Preferências =====
+if (pvLog) pvLog.setAttribute('aria-live', 'polite');
 
-function uid() { return 't_' + Math.random().toString(36).slice(2, 9); }
-function nowISO() { return new Date().toISOString(); }
-
-function loadState() {
-    try {
-        const raw = localStorage.getItem('threads_v1');
-        if (raw) {
-            state.threads = JSON.parse(raw);
-            const ids = Object.keys(state.threads);
-            state.currentId = ids[0] || null;
-        } else {
-            const id = uid();
-            state.threads[id] = { title: 'Novo chat', messages: [], createdAt: nowISO() };
-            state.currentId = id;
-            saveState();
-        }
-    } catch {
-        state.threads = {};
+function savePrefs() {
+  try {
+    localStorage.setItem('pv_prefs_v1', JSON.stringify({
+      days: PV_DAYS,
+      useMA: !!pvMM?.checked
+    }));
+  } catch {}
+}
+function loadPrefs() {
+  try {
+    const raw = localStorage.getItem('pv_prefs_v1');
+    if (!raw) return;
+    const { days, useMA } = JSON.parse(raw);
+    if (days && [7, 14, 30].includes(days)) {
+      PV_DAYS = days;
+      pvRangeBtns.forEach(b => {
+        const isActive = parseInt(b.dataset.days, 10) === PV_DAYS;
+        b.classList.toggle('active', isActive);
+        b.setAttribute('aria-pressed', String(isActive));
+      });
     }
-}
-function saveState() { localStorage.setItem('threads_v1', JSON.stringify(state.threads)); }
-
-function setCurrent(id) {
-    state.currentId = id;
-    renderThreadList();
-    renderChat();
-}
-
-function newThread() {
-    const id = uid();
-    state.threads[id] = { title: 'Novo chat', messages: [], createdAt: nowISO() };
-    saveState();
-    setCurrent(id);
-}
-
-function renderThreadList() {
-    threadList.innerHTML = '';
-    const entries = Object.entries(state.threads)
-        .sort((a, b) => (b[1].createdAt || '').localeCompare(a[1].createdAt || ''));
-    for (const [id, t] of entries) {
-        const li = document.createElement('li');
-        if (id === state.currentId) li.classList.add('active');
-        const first = t.messages.find(m => m.role === 'user')?.text || t.title || 'Novo chat';
-        const preview = t.messages.at(-1)?.text || '';
-        li.innerHTML = `<div class="title">${first.slice(0, 40)}</div><div class="preview">${preview.slice(0, 60)}</div>`;
-        li.addEventListener('click', () => setCurrent(id));
-        threadList.appendChild(li);
+    if (typeof useMA === 'boolean' && pvMM) {
+      pvMM.checked = useMA;
     }
+  } catch {}
 }
 
-function renderChat() {
-    chat.innerHTML = '';
-    const cur = state.threads[state.currentId];
-    if (!cur) return;
-    for (const msg of cur.messages) {
-        addMessage(msg.text, msg.role === 'user' ? 'user' : 'bot', false);
-    }
-    chat.scrollTop = chat.scrollHeight;
-}
-
-// ---------- UI helpers ----------
-function typeWriterEffect(element, text, speed = 5) {
-    let i = 0;
-    (function typing() {
-        if (i < text.length) {
-            element.textContent += text.charAt(i++);
-            setTimeout(typing, speed);
-        }
-    })();
-}
-function addMessage(text, cls, effect = false) {
-    const msg = document.createElement('div');
-    msg.classList.add('mensagem', cls);
-    if (effect) typeWriterEffect(msg, text); else msg.textContent = text;
-    chat.appendChild(msg);
-    chat.scrollTop = chat.scrollHeight;
-}
-
-// ---------- Enviar mensagem ao backend ----------
-formulario.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const txt = mensagemInput.value.trim();
-    if (!txt) return;
-    mensagemInput.value = "";
-
-    const cur = state.threads[state.currentId];
-    cur.messages.push({ role: 'user', text: txt, at: nowISO() });
-    saveState();
-    addMessage("Você: " + txt, "user");
-
-    try {
-        const res = await fetch("/responder", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ mensagem: txt })
-        });
-        const data = await res.json();
-        const botTxt = "Bot: " + (data.resposta || "Sem resposta.");
-        cur.messages.push({ role: 'bot', text: botTxt, at: nowISO() });
-        saveState();
-        addMessage(botTxt, "bot", true);
-    } catch (err) {
-        const botTxt = "Bot: Erro ao tentar responder.";
-        cur.messages.push({ role: 'bot', text: botTxt, at: nowISO() });
-        saveState();
-        addMessage(botTxt, "bot");
-    }
-});
-
-// Enter envia (sem Shift)
-mensagemInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        enviarBtn.click();
-    }
-});
-
-// Limpar chat atual
-limparBtn.addEventListener('click', () => {
-    const cur = state.threads[state.currentId];
-    if (!cur) return;
-    cur.messages = [];
-    saveState();
-    renderChat();
-});
-
-// Novo chat
-novoChatBtn.addEventListener('click', newThread);
-
-// Navegação entre views
-navItems.forEach(btn => {
-    btn.addEventListener('click', () => {
-        navItems.forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        const view = btn.dataset.view;
-        document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-        document.getElementById(view).classList.add('active');
-    });
-});
-
-// ---------- Previsões: estado local ----------
-const pvState = {
-    history: [] // [{id, tema, at}]
-};
-
-function pvLoadHistory() {
-    try {
-        const raw = localStorage.getItem('pv_history_v1');
-        pvState.history = raw ? JSON.parse(raw) : [];
-    } catch {
-        pvState.history = [];
-    }
-}
-function pvSaveHistory() {
-    localStorage.setItem('pv_history_v1', JSON.stringify(pvState.history));
-}
-function pvAddHistory(tema) {
-    const id = 'p_' + Math.random().toString(36).slice(2, 9);
-    // evita duplicatas consecutivas do mesmo tema
-    if (pvState.history[0]?.tema?.toLowerCase() === tema.toLowerCase()) return;
-    pvState.history.unshift({ id, tema, at: nowISO() });
-    // limita tamanho
-    if (pvState.history.length > 30) pvState.history.length = 30;
-    pvSaveHistory();
-    renderPVHistory();
-}
-function renderPVHistory() {
-    if (!pvHistorico) return;
-    pvHistorico.innerHTML = '';
-    pvState.history.forEach(item => {
-        const li = document.createElement('li');
-        const date = new Date(item.at).toLocaleString('pt-BR');
-        li.innerHTML = `
-      <div class="pv-h-item-title">${item.tema}</div>
-      <div class="pv-h-item-date">${date}</div>
-    `;
-        li.addEventListener('click', () => {
-            pvTema.value = item.tema;
-            pvTema.focus();
-        });
-        pvHistorico.appendChild(li);
-    });
-}
-
-// ---------- Previsões helpers ----------
+// ===== Util =====
 function pvAdd(text, role = 'bot') {
-    const div = document.createElement('div');
-    div.classList.add('mensagem', role === 'user' ? 'user' : 'bot');
-    div.textContent = text;
-    pvLog.appendChild(div);
-    pvLog.scrollTop = pvLog.scrollHeight;
-}
-
-function renderChart(series) {
-    const labels = series.map(p => p.date);
-    const data = series.map(p => p.count);
-    if (pvChart) { pvChart.destroy(); }
-    pvChart = new Chart(pvCanvas.getContext('2d'), {
-        type: 'line',
-        data: {
-            labels,
-            datasets: [{ label: 'Matérias/dia', data, tension: 0.3 }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            animation: false,
-            scales: {
-                x: { ticks: { autoSkip: true, maxTicksLimit: 7 } },
-                y: { beginAtZero: true, suggestedMax: Math.max(3, Math.max(0, ...data) + 1) }
-            }
-        }
-    });
+  const div = document.createElement('div');
+  div.classList.add('mensagem', role === 'user' ? 'user' : 'bot');
+  // Segurança: sem HTML arbitrário
+  div.textContent = text;
+  pvLog.appendChild(div);
+  pvLog.scrollTop = pvLog.scrollHeight;
 }
 
 function pvClear() {
-    pvLog.innerHTML = '';
-    pvArticles.innerHTML = '';
-    if (pvChart) { pvChart.destroy(); pvChart = null; }
+  pvLog.innerHTML = '';
+  pvArticles.innerHTML = '';
+  if (pvChart) { pvChart.destroy(); pvChart = null; }
+  currentSeries = [];
+  currentTema = '';
 }
 
-// Botões da Previsões
-pvLimparBtn?.addEventListener('click', pvClear);
-pvNovoBtn?.addEventListener('click', () => {
-    pvClear();
-    pvTema.value = '';
-    pvTema.focus();
+function movingAverage(arr, window = 3) {
+  if (!arr || arr.length === 0) return [];
+  const out = [];
+  for (let i = 0; i < arr.length; i++) {
+    const start = Math.max(0, i - window + 1);
+    const slice = arr.slice(start, i + 1);
+    const avg = slice.reduce((a, b) => a + b, 0) / slice.length;
+    out.push(Number(avg.toFixed(2)));
+  }
+  return out;
+}
+
+function fmtDateLabel(iso) {
+  // Tenta usar só AAAA-MM-DD para clareza no eixo
+  try {
+    return (iso || '').slice(0, 10);
+  } catch { return iso; }
+}
+
+// ===== Histórico (localStorage, embutido no painel) =====
+const pvState = { history: [] }; // [{tema, at}]
+function pvLoadHistory() {
+  try {
+    const raw = localStorage.getItem('pv_history_v2');
+    pvState.history = raw ? JSON.parse(raw) : [];
+  } catch {
+    pvState.history = [];
+  }
+}
+function pvSaveHistory() {
+  localStorage.setItem('pv_history_v2', JSON.stringify(pvState.history));
+}
+function pvAddHistory(tema) {
+  if (!tema) return;
+  // Evita duplicar consecutivo
+  if (pvState.history[0]?.tema?.toLowerCase() === tema.toLowerCase()) return;
+
+  // Remove duplicatas antigas do mesmo tema
+  pvState.history = pvState.history.filter(h => h.tema.toLowerCase() !== tema.toLowerCase());
+
+  pvState.history.unshift({ tema, at: new Date().toISOString() });
+  if (pvState.history.length > 40) pvState.history.length = 40;
+  pvSaveHistory();
+  renderPVHistory();
+}
+function renderPVHistory() {
+  if (!pvHistorico) return;
+  pvHistorico.innerHTML = '';
+  pvState.history.forEach(item => {
+    const li = document.createElement('li');
+    const date = new Date(item.at).toLocaleString('pt-BR');
+    li.innerHTML = `
+      <div class="pv-h-item-title">${item.tema}</div>
+      <div class="pv-h-item-date">${date}</div>
+    `;
+    li.addEventListener('click', () => {
+      pvTema.value = item.tema;
+      // Ação direta: reexecuta a busca ao clicar no histórico
+      submitTema(item.tema);
+    });
+    pvHistorico.appendChild(li);
+  });
+}
+pvClearHistory?.addEventListener('click', () => {
+  pvState.history = [];
+  pvSaveHistory();
+  renderPVHistory();
 });
 
-// Submit da Previsões
-pvForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const tema = pvTema.value.trim();
-    if (!tema) return;
-    pvTema.value = "";
-    pvAdd("Você: " + tema, 'user');
-    pvAdd("Bot: coletando manchetes e montando série...", 'bot');
-
-    try {
-        const res = await fetch('/prever', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ tema })
-        });
-        const data = await res.json();
-        if (data.erro) { pvAdd("Bot: " + data.erro, 'bot'); return; }
-
-        pvAddHistory(tema);
-
-        pvAdd("Bot: " + (data.previsao || "Sem resumo."), 'bot');
-        renderChart(data.series || []);
-
-        // lista de artigos
-        pvArticles.innerHTML = (data.artigos || []).map(a => {
-            const d = a.data_iso ? new Date(a.data_iso).toLocaleString('pt-BR') : '';
-            const fonte = a.fonte ? ` — ${a.fonte}` : '';
-            return `<div>• <a href="${a.url}" target="_blank" rel="noopener">${a.titulo || 'sem título'}</a> <span style="color:#8aa0bf">${fonte} ${d ? '· ' + d : ''}</span></div>`;
-        }).join('');
-    } catch (err) {
-        pvAdd("Bot: erro ao consultar /prever", 'bot');
+// ===== Chart.js (área com gradiente + linha da MM opcional) =====
+function buildDatasets(series) {
+  const counts = series.map(p => p.count);
+  const datasets = [
+    {
+      label: 'Matérias/dia',
+      data: counts,
+      borderColor: '#66a3ff',
+      backgroundColor: (ctx) => {
+        const { chart } = ctx;
+        const { ctx: c, chartArea } = chart;
+        if (!chartArea) return '#66a3ff33';
+        const gradient = c.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+        gradient.addColorStop(0, 'rgba(102, 163, 255, 0.35)');
+        gradient.addColorStop(1, 'rgba(102, 163, 255, 0.00)');
+        return gradient;
+      },
+      fill: 'start',
+      tension: 0.3,
+      pointRadius: 3,
+      pointHoverRadius: 4,
+      borderWidth: 2
     }
+  ];
+  if (pvMM?.checked) {
+    datasets.push({
+      label: 'MM 3d',
+      data: movingAverage(counts, 3),
+      borderColor: '#a78bfa',
+      pointRadius: 0,
+      borderWidth: 2,
+      tension: 0.25
+    });
+  }
+  return datasets;
+}
+
+function renderChart(series) {
+  if (!pvCanvas) return;
+  const labels = series.map(p => fmtDateLabel(p.date));
+  const counts = series.map(p => p.count);
+  const { slope, pct, lastDelta, line } = trendStats(series);
+
+  // cor da série principal por tendência
+  const up = slope > 0.0001;
+  const down = slope < -0.0001;
+  const mainColor = up ? '#22c55e' : (down ? '#ef4444' : '#66a3ff'); // verde / vermelho / neutro
+
+  if (pvChart) pvChart.destroy();
+  pvChart = new Chart(pvCanvas.getContext('2d'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Matérias/dia',
+          data: counts,
+          borderColor: mainColor,
+          backgroundColor: (ctx) => {
+            const { chart } = ctx;
+            const { ctx: c, chartArea } = chart;
+            if (!chartArea) return mainColor + '33';
+            const g = c.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+            g.addColorStop(0, (up ? 'rgba(34,197,94,.35)' : (down ? 'rgba(239,68,68,.35)' : 'rgba(102,163,255,.35)')));
+            g.addColorStop(1, 'rgba(0,0,0,0)');
+            return g;
+          },
+          fill: 'start',
+          tension: 0.3,
+          pointRadius: 3,
+          pointHoverRadius: 4,
+          borderWidth: 2
+        },
+        // MM 3d opcional
+        ...(pvMM?.checked ? [{
+          label: 'MM 3d',
+          data: movingAverage(counts, 3),
+          borderColor: '#a78bfa',
+          pointRadius: 0,
+          borderWidth: 2,
+          tension: 0.25
+        }] : []),
+        // Linha de tendência (reta de regressão)
+        {
+          label: 'Tendência',
+          data: line,
+          borderColor: up ? '#22c55e' : (down ? '#ef4444' : '#9fb0c8'),
+          borderDash: [6,4],
+          pointRadius: 0,
+          borderWidth: 2,
+          tension: 0
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          mode: 'index',
+          intersect: false,
+          callbacks: {
+            title: (items) => `Dia: ${items[0].label}`,
+            afterBody: () => {
+              const sign = lastDelta > 0 ? '↑' : (lastDelta < 0 ? '↓' : '→');
+              return [`Variação dia: ${sign} ${lastDelta}`, `Tendência (${PV_DAYS}d): ${pct.toFixed(1)}%`];
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { color: 'rgba(255,255,255,.07)' },
+          ticks: { autoSkip: true, maxTicksLimit: 8 }
+        },
+        y: {
+          beginAtZero: true,
+          grid: { color: 'rgba(255,255,255,.07)' },
+          suggestedMax: Math.max(5, Math.max(...counts, 0) + 2)
+        }
+      }
+    }
+  });
+
+  // Badge visual no título (opcional, sem mexer no CSS)
+  const titleEl = previsoesView?.querySelector('.pv-card .pv-card-title');
+  if (titleEl && titleEl.textContent?.includes('Volume de notícias por dia')) {
+    titleEl.nextSibling?.nodeType === 1 && titleEl.nextSibling.classList?.contains('pv-trend') && titleEl.nextSibling.remove();
+    const badge = document.createElement('span');
+    badge.className = 'pv-trend';
+    badge.style.marginLeft = '8px';
+    badge.style.fontWeight = '700';
+    badge.style.color = up ? '#22c55e' : (down ? '#ef4444' : '#9fb0c8');
+    const arrow = up ? '↑' : (down ? '↓' : '→');
+    badge.textContent = `${arrow} ${pct.toFixed(1)}%`;
+    titleEl.after(badge);
+  }
+}
+
+
+// Redimensiona o gráfico ao mostrar a view de previsões
+function whenPrevisoesBecomesVisible(cb) {
+  if (!previsoesView) return;
+  const obs = new IntersectionObserver((entries) => {
+    entries.forEach(en => {
+      if (en.isIntersecting) cb();
+    });
+  }, { root: document, threshold: 0.1 });
+  obs.observe(previsoesView);
+}
+whenPrevisoesBecomesVisible(() => {
+  if (pvChart) {
+    // pequeno raf para garantir layout estável
+    requestAnimationFrame(() => pvChart.resize());
+  }
 });
 
-// ---------- Boot ----------
-loadState();
-renderThreadList();
-renderChat();
+// ===== Exportar CSV da série atual (inclui MM quando ligada) =====
+pvExport?.addEventListener('click', () => {
+  if (!currentSeries.length) return;
+  const counts = currentSeries.map(p => p.count);
+  const mm = pvMM?.checked ? movingAverage(counts, 3) : [];
+  const header = pvMM?.checked ? 'date,count,mm3d\n' : 'date,count\n';
+  const rows = currentSeries.map((p, i) =>
+    pvMM?.checked ? `${p.date},${p.count},${mm[i] ?? ''}` : `${p.date},${p.count}`
+  ).join('\n');
+  const blob = new Blob([header + rows], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  const temaSlug = (currentTema || 'series_previsoes').toLowerCase().replace(/[^\w\-]+/g,'-');
+  a.download = `${temaSlug}-${PV_DAYS}d.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+});
 
+// ===== Controles de período e MM =====
+pvRangeBtns.forEach(btn => {
+  // A11y toggle
+  btn.setAttribute('aria-pressed', String(btn.classList.contains('active')));
+  btn.addEventListener('click', () => {
+    pvRangeBtns.forEach(b => {
+      const active = b === btn;
+      b.classList.toggle('active', active);
+      b.setAttribute('aria-pressed', String(active));
+    });
+    PV_DAYS = parseInt(btn.dataset.days, 10) || 7;
+    savePrefs();
+    // Se já temos dados, reconsulta com novo range para refletir no gráfico e artigos
+    if (currentTema) {
+      submitTema(currentTema);
+    } else if (currentSeries.length) {
+      // fallback: re-renderiza somente a MM
+      renderChart(currentSeries);
+    }
+  });
+});
+pvMM?.addEventListener('change', () => {
+  savePrefs();
+  if (currentSeries.length) renderChart(currentSeries);
+});
+
+pvLimpar?.addEventListener('click', pvClear);
+
+// ===== Fetch com cancelamento + retry =====
+async function fetchWithRetry(url, options = {}, retries = 2, delay = 800) {
+  try {
+    const res = await fetch(url, options);
+    if (!res.ok) {
+      if (res.status === 429 && retries > 0) {
+        await new Promise(r => setTimeout(r, delay));
+        return fetchWithRetry(url, options, retries - 1, delay * 2);
+      }
+      const text = await res.text().catch(() => '');
+      throw new Error(`HTTP ${res.status}${text ? `: ${text}` : ''}`);
+    }
+    return res;
+  } catch (e) {
+    if (retries > 0) {
+      await new Promise(r => setTimeout(r, delay));
+      return fetchWithRetry(url, options, retries - 1, delay * 2);
+    }
+    throw e;
+  }
+}
+
+// ===== Fluxo principal =====
+async function submitTema(tema) {
+  const value = (tema ?? pvTema.value ?? '').trim();
+  if (!value) return;
+
+  // Cancela requisição anterior, se houver
+  if (inFlight) inFlight.abort?.();
+  const controller = new AbortController();
+  inFlight = controller;
+
+  // UI
+  const userLine = `Você: ${value}`;
+  pvAdd(userLine, 'user');
+  const thinkingMsg = 'Bot: coletando manchetes e montando série...';
+  pvAdd(thinkingMsg, 'bot');
+
+  // Desabilita form durante a chamada
+  const submitBtn = pvForm?.querySelector('button[type="submit"]');
+  if (submitBtn) submitBtn.disabled = true;
+  if (pvTema) pvTema.value = '';
+
+  try {
+    const res = await fetchWithRetry('/prever', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tema: value, dias: PV_DAYS }),
+      signal: controller.signal
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (data.erro) { pvAdd(`Bot: ${data.erro}`, 'bot'); return; }
+
+    currentTema = value;
+
+    // histórico local
+    pvAddHistory(value);
+
+    // Remove a última linha "pensando..." (se ainda for a última)
+    const last = pvLog.lastElementChild;
+    if (last && last.textContent === thinkingMsg) {
+      last.remove();
+    }
+
+    // resumo
+    pvAdd(`Bot: ${data.previsao || 'Sem resumo.'}`, 'bot');
+
+    // série + gráfico
+    currentSeries = Array.isArray(data.series) ? data.series : [];
+    // Proteção: ordena por data asc se vier embaralhado
+    currentSeries.sort((a, b) => String(a.date).localeCompare(String(b.date)));
+    renderChart(currentSeries);
+
+    // artigos
+    const arts = Array.isArray(data.artigos) ? data.artigos : [];
+    pvArticles.innerHTML = arts.map(a => {
+      const d = a.data_iso ? new Date(a.data_iso).toLocaleString('pt-BR') : '';
+      const fonte = a.fonte ? ` — ${a.fonte}` : '';
+      const safeTitle = a.titulo || 'sem título';
+      const safeUrl = a.url || '#';
+      return `<div>• <a href="${safeUrl}" target="_blank" rel="noopener">${safeTitle}</a>
+              <span style="color:#8aa0bf">${fonte}${d ? ' · ' + d : ''}</span></div>`;
+    }).join('');
+
+  } catch (err) {
+    if (err?.name === 'AbortError') {
+      pvAdd('Bot: consulta anterior cancelada.', 'bot');
+    } else {
+      pvAdd('Bot: erro ao consultar /prever — ' + (err?.message || 'falha desconhecida'), 'bot');
+    }
+  } finally {
+    // Reabilita form
+    if (submitBtn) submitBtn.disabled = false;
+    // limpa o inFlight se for o mesmo controller
+    if (inFlight === controller) inFlight = null;
+  }
+}
+
+pvForm.addEventListener('submit', (e) => {
+  e.preventDefault();
+  submitTema();
+});
+
+// ===== Boot =====
+loadPrefs();
 pvLoadHistory();
 renderPVHistory();
+
+// Garante que o botão ativo está com aria-pressed correto (caso prefs não tenham sido carregadas)
+pvRangeBtns.forEach(b => {
+  const active = parseInt(b.dataset.days, 10) === PV_DAYS;
+  b.classList.toggle('active', active);
+  b.setAttribute('aria-pressed', String(active));
+});
+
+// Recalibra o chart ao redimensionar janela
+window.addEventListener('resize', () => {
+  if (pvChart) pvChart.resize();
+});

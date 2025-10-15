@@ -6,6 +6,7 @@
   <title>Meu Chat IA</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='previsoes.css') }}">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
@@ -43,65 +44,78 @@
     </section>
 
     <!-- View: Previsões (remodelado) -->
-    <section id="previsoes-view" class="view">
-      <header class="topbar">
-        <h1>Previsões (experimental)</h1>
-        <div class="actions pv-actions">
-          <div class="pv-segment" role="group" aria-label="Intervalo">
-            <button class="seg-btn pv-range active" data-days="7">7d</button>
-            <button class="seg-btn pv-range" data-days="14">14d</button>
-            <button class="seg-btn pv-range" data-days="30">30d</button>
-          </div>
-
-          <label class="pv-toggle">
-            <input type="checkbox" id="pv-mm" checked>
-            <span>Média móvel 3d</span>
-          </label>
-
-          <button id="pv-export" class="soft" title="Exportar CSV">Exportar</button>
-          <button id="pv-limpar" class="soft" title="Limpar">Limpar</button>
-        </div>
-      </header>
-
-      <div class="previsoes-layout">
-        <!-- Painel da conversa + histórico (sem sidebar própria) -->
-        <div class="pv-panel">
-          <div id="pv-log" class="pv-log"></div>
-
-          <div class="pv-history">
-            <div class="pv-history-head">
-              <span>Histórico de temas</span>
-              <button id="pv-clear-history" class="linkish" title="Limpar histórico">limpar</button>
-            </div>
-            <ul id="pv-historico" class="pv-historico"></ul>
-          </div>
-
-          <form id="pv-form" class="composer pv-composer">
-            <input id="pv-tema" placeholder="Tema (ex.: IA no Brasil, petróleo, inflação…)" />
-            <button type="submit">Analisar</button>
-          </form>
-        </div>
-
-        <!-- Painel do gráfico + artigos -->
-        <div class="pv-analytics">
-          <div class="pv-card">
-            <div class="pv-card-head">
-              <div class="pv-card-title">Volume de notícias por dia</div>
-              <div class="pv-legend">
-                <span class="dot dot-count"></span> Matérias/dia
-                <span class="dot dot-ma"></span> MM 3d
-              </div>
-            </div>
-            <canvas id="pv-canvas"></canvas>
-          </div>
-
-          <div class="pv-card pv-articles-card">
-            <div class="pv-card-title">Artigos recentes</div>
-            <div id="pv-articles" class="pv-articles"></div>
-          </div>
-        </div>
+    
+    <!-- View: Previsões (remodelado) -->
+<section id="previsoes-view" class="view">
+  <header class="topbar">
+    <h1>Previsões (experimental)</h1>
+    <div class="actions pv-actions">
+      <div class="pv-segment" role="group" aria-label="Intervalo">
+        <button class="seg-btn pv-range active" data-days="7">7d</button>
+        <button class="seg-btn pv-range" data-days="14">14d</button>
+        <button class="seg-btn pv-range" data-days="30">30d</button>
       </div>
-    </section>
+
+      <label class="pv-toggle">
+        <input type="checkbox" id="pv-mm" checked>
+        <span>Média móvel 3d</span>
+      </label>
+
+      <button id="pv-export" class="soft" title="Exportar CSV">Exportar</button>
+      <button id="pv-limpar" class="soft" title="Limpar">Limpar</button>
+    </div>
+  </header>
+
+  <div class="previsoes-layout">
+    <!-- Painel da conversa + histórico -->
+    <div class="pv-panel">
+      <div id="pv-log" class="pv-log"></div>
+
+      <div class="pv-history">
+        <div class="pv-history-head">
+          <span>Histórico de temas</span>
+          <button id="pv-clear-history" class="linkish" title="Limpar histórico">limpar</button>
+        </div>
+        <ul id="pv-historico" class="pv-historico"></ul>
+      </div>
+
+      <form id="pv-form" class="composer pv-composer">
+        <input id="pv-tema" placeholder="Tema (ex.: IA no Brasil, petróleo, inflação…)" />
+        <button type="submit">Analisar</button>
+      </form>
+    </div>
+
+    <!-- Painel do gráfico + artigos -->
+    <div class="pv-analytics">
+      <div class="pv-card">
+        <div class="pv-card-head">
+          <div class="pv-card-title">Volume de notícias por dia</div>
+          <div class="pv-legend">
+            <span class="dot dot-count"></span> Matérias/dia
+            <span class="dot dot-ma"></span> MM 3d
+          </div>
+        </div>
+
+        <!-- 🔥 KPIs agora no local certo -->
+        <div class="pv-stats">
+          <div class="pv-stat"><div class="label">Tendência</div><div class="value" id="pv-tendencia">Alta ↑</div></div>
+          <div class="pv-stat"><div class="label">Δ Diário</div><div class="value" id="pv-delta">+3</div></div>
+          <div class="pv-stat"><div class="label">Chances</div><div class="value" id="pv-chances">75%</div></div>
+        </div>
+
+        <canvas id="pv-canvas"></canvas>
+      </div>
+
+      <div class="pv-card pv-articles-card">
+        <div class="pv-card-title">Artigos recentes</div>
+        <div id="pv-articles" class="pv-articles"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+
   </main>
 
   <!-- Seu JS do chat principal (inalterado) -->

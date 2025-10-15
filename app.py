@@ -1,4 +1,4 @@
-import os, sys, json, logging, requests
+import os, sys, json, logging, time, math, statistics, requests
 from pathlib import Path
 from urllib.parse import quote_plus
 from datetime import datetime, timedelta, timezone
@@ -58,7 +58,6 @@ def _extract_texts(data: dict) -> str:
     return "\n".join(texts).strip()
 
 def _payload(prompt: str) -> dict:
-    # Removido 'responseModalities' (causava 400)
     return {
         "systemInstruction": {"role": "system", "parts": [{"text": BOT_PERSONA}]},
         "contents": [{"role": "user", "parts": [{"text": prompt}]}],
@@ -128,26 +127,63 @@ def health():
     })
 
 # ===================== CÉREBRO “PREVISÕES” (sem custos) =====================
-# 1) Coleta simples via Google News RSS (com User-Agent pra evitar 403)
+
+# Cache leve em memória p/ RSS (TTL curto evita loop/rajada)
+_RSS_CACHE = {}  # key: (tema_normalizado, max_items) -> {ts, items}
+_RSS_TTL_SECONDS = 300  # 5 min de cache
+
+def _rss_cache_key(tema: str, max_items: int) -> str:
+    return f"{tema.strip().lower()}::{max_items}"
+
+def _from_cache(tema: str, max_items: int):
+    try:
+        k = _rss_cache_key(tema, max_items)
+        ent = _RSS_CACHE.get(k)
+        if ent and (time.time() - ent["ts"] < _RSS_TTL_SECONDS):
+            return ent["items"]
+    except Exception:
+        pass
+    return None
+
+def _to_cache(tema: str, max_items: int, items: list):
+    try:
+        k = _rss_cache_key(tema, max_items)
+        _RSS_CACHE[k] = {"ts": time.time(), "items": items}
+    except Exception:
+        pass
+
 def _fetch_news(tema: str, max_items: int = 80):
     """
     Retorna lista de artigos: [{'titulo','url','dt'}] usando Google News RSS.
-    Mesmo que falhe, retornamos [] (a pipeline segue).
+    Resiliente: usa cache curto, timeout, e evita quebrar a pipeline.
     """
+    cached = _from_cache(tema, max_items)
+    if cached is not None:
+        return cached
+
     url = (
         "https://news.google.com/rss/search?"
         f"q={quote_plus(tema)}&hl=pt-BR&gl=BR&ceid=BR:pt-419"
     )
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                      "AppleWebKit/537.36 (KHTML, like Gecko) "
-                      "Chrome/124.0 Safari/537.36"
+        "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                       "AppleWebKit/537.36 (KHTML, like Gecko) "
+                       "Chrome/124.0 Safari/537.36")
     }
-    try:
-        r = requests.get(url, headers=headers, timeout=(5, 15))
-        r.raise_for_status()
-    except Exception as e:
-        logging.warning("Falha ao buscar RSS: %s", e)
+
+    # retries simples
+    last_err = None
+    for attempt in range(3):
+        try:
+            r = requests.get(url, headers=headers, timeout=(5, 15))
+            r.raise_for_status()
+            break
+        except Exception as e:
+            last_err = e
+            time.sleep(0.4 * (attempt + 1))
+    else:
+        logging.warning("Falha ao buscar RSS (esgotou retries): %s", last_err)
+        _to_cache(tema, max_items, [])
         return []
 
     import xml.etree.ElementTree as ET
@@ -171,13 +207,21 @@ def _fetch_news(tema: str, max_items: int = 80):
                 break
     except Exception:
         logging.exception("Erro parseando RSS")
+        _to_cache(tema, max_items, [])
         return []
 
+    _to_cache(tema, max_items, items)
     return items
 
-# 2) Agrega por dia (últimos N dias, incluindo hoje)
 def _build_series(articles, dias: int):
-    if dias < 1: dias = 7
+    """Agrega por dia (últimos N dias, incluindo hoje). Sempre retorna N pontos."""
+    if not isinstance(dias, int):
+        try:
+            dias = int(dias)
+        except Exception:
+            dias = 7
+    dias = max(1, min(180, dias))  # trava em 180 dias por segurança
+
     today = datetime.now(timezone.utc).date()
     buckets = {(today + timedelta(days=i)).isoformat(): 0 for i in range(-(dias-1), 1)}
 
@@ -192,9 +236,8 @@ def _build_series(articles, dias: int):
     series = [{"date": k, "count": buckets[k]} for k in sorted(buckets.keys())]
     return series
 
-# 3) Heurística simples + hipóteses (rule-based)
 def _analyze(series):
-    vals = [p["count"] for p in series] or [0]
+    vals = [int(p.get("count", 0)) for p in series] or [0]
     last = vals[-1]
     prev = vals[:-1] or [0]
     mean_prev = sum(prev)/max(1, len(prev))
@@ -235,8 +278,8 @@ def _analyze(series):
     ]
     return resumo, hipoteses
 
-# 4) Opcional: refina o resumo com LLM (se tiver chave)
 def _llm_refine_resumo(tema, series, resumo_base):
+    """Opcional: refina o resumo com LLM (se houver chave). Fallback seguro."""
     if not get_api_key():
         return resumo_base
     try:
@@ -245,53 +288,129 @@ def _llm_refine_resumo(tema, series, resumo_base):
             f"Tema: {tema}\n"
             f"Série (lista de objetos com date e count): {compact}\n"
             f"Escreva um parágrafo curto (máx. 3 linhas) resumindo a tendência. "
-            f"Seja direto. Rascunho: '{resumo_base}'."
+            f"Seja direto. Rascunho: '{resumo_base}'!"
         )
         resp = _call_gemini(prompt)
         if resp.status_code == 200:
             txt = _extract_texts(resp.json()).strip()
             return txt or resumo_base
+        else:
+            logging.warning("Refino LLM falhou HTTP %s", resp.status_code)
     except Exception:
-        pass
+        logging.exception("Refino LLM disparou exceção")
     return resumo_base
+
+def _trend_confidence(vals):
+    """Computa slope, variação percentual do período e last_delta + confiança simples."""
+    n = len(vals)
+    if n < 2:
+        return 0.0, 0.0, 0, 0.5, "Média"
+
+    x = list(range(n))
+    mean_x = sum(x) / n
+    mean_y = sum(vals) / n
+    num = sum((x[i]-mean_x)*(vals[i]-mean_y) for i in range(n))
+    den = sum((x[i]-mean_x)**2 for i in range(n)) or 1
+    slope = num / den
+
+    first, last = vals[0], vals[-1]
+    pct = ((last - first) / first * 100.0) if first else 0.0
+    last_delta = last - vals[-2]
+
+    try:
+        stdev = statistics.pstdev(vals)
+        score = 1 / (1 + math.exp(-slope / (stdev + 1e-6)))
+        if score > 0.66:
+            conf_label = "Alta"
+        elif score < 0.33:
+            conf_label = "Baixa"
+        else:
+            conf_label = "Média"
+    except Exception:
+        score, conf_label = 0.5, "Média"
+
+    return slope, pct, last_delta, score, conf_label
 
 # ------------------------- ROTA /prever -------------------------------------
 @app.post("/prever")
 def prever():
     dados = request.get_json(force=True) or {}
     tema = (dados.get("tema") or "").strip()
-    dias = int(dados.get("dias", 7))
+    dias = dados.get("dias", 7)
+    ano_ini = int(dados.get("anos_de", 0) or 0)
+    ano_fim = int(dados.get("anos_ate", 0) or 0)
+
     if not tema:
         return jsonify({"erro": "Informe 'tema' no body JSON."}), 400
 
-    # 1) coleta (mesmo que falhe, seguimos com fallback 0)
-    articles = _fetch_news(tema, max_items=120)
+    # Sanitiza dias
+    try:
+        dias = int(dias)
+    except Exception:
+        dias = 7
+    dias = max(1, min(180, dias))
 
-    # 2) série
-    series = _build_series(articles, dias)
+    # 1) coleta RSS (com cache curto + retries)
+    artigos = _fetch_news(tema, max_items=120)
+    if ano_ini and ano_fim and ano_ini <= ano_fim:
+        artigos = [a for a in artigos if ano_ini <= a["dt"].year <= ano_fim]
 
-    # 3) análise
+    # 2) série de contagens por dia
+    series = _build_series(artigos, dias)
+    # garante ordenação e integridade
+    series = sorted(series, key=lambda p: p["date"])
+    vals = [int(p.get("count", 0)) for p in series] or [0]
+
+    # 3) análise + (opcional) refino LLM
     resumo_base, hipoteses = _analyze(series)
     previsao_txt = _llm_refine_resumo(tema, series, resumo_base)
 
-    # 4) top artigos recentes (até 12)
+    # 4) tendência e confiança
+    slope, pct, last_delta, score, conf_label = _trend_confidence(vals)
+    trend = {
+        "slope": round(slope, 6),
+        "pct": round(pct, 2),
+        "last_delta": int(last_delta),
+        "confidence": conf_label,
+        "score": round(float(score), 4)
+    }
+
+    # 5) artigos recentes (até 12)
     artigos_out = []
-    for a in sorted(articles, key=lambda x: x["dt"], reverse=True)[:12]:
+    for a in sorted(artigos, key=lambda x: x["dt"], reverse=True)[:12]:
         artigos_out.append({
             "titulo": a["titulo"],
             "url": a["url"],
-            "data_iso": a["dt"].astimezone(timezone.utc).isoformat()
+            "data_iso": a["dt"].astimezone(timezone.utc).isoformat(),
+            "fonte": a["url"].split('/')[2] if '//' in a["url"] else ''
         })
 
-    return jsonify({
+    # 6) resposta JSON estável
+    resp = {
         "previsao": previsao_txt,
-        "hipoteses": hipoteses,
-        "series": series,     # [{date, count}]
-        "artigos": artigos_out
-    }), 200
+        "series": series,               # [{ date: "YYYY-MM-DD", count: int }]
+        "trend": trend,                 # { slope, pct, last_delta, confidence, score }
+        "artigos": artigos_out,         # [{ titulo, url, data_iso, fonte }]
+        "hipoteses": hipoteses,         # sugestões rule-based
+        "meta": {
+            "tema": tema,
+            "dias": dias,
+            "filtrado_por_ano": bool(ano_ini and ano_fim and ano_ini <= ano_fim),
+            "anos_de": ano_ini or None,
+            "anos_ate": ano_fim or None,
+            "series_total": len(series),
+            "artigos_total": len(artigos_out)
+        }
+    }
+
+    logging.info("[/prever] tema='%s' dias=%s -> pontos=%s artigos=%s trend=%s%% (Δ=%s)",
+                 tema, dias, len(series), len(artigos_out), resp["trend"]["pct"], resp["trend"]["last_delta"])
+
+    return jsonify(resp), 200
 
 # --- Main -------------------------------------------------------------------
 if __name__ == "__main__":
     debug = os.getenv("FLASK_DEBUG", "1") == "1"
     port = int(os.getenv("PORT", "5000"))
-    app.run(host="0.0.0.0", port=port, debug=debug)
+    # use_reloader=False evita duplicar processo no Windows e "loops" estranhos
+    app.run(host="127.0.0.1", port=port, debug=debug, use_reloader=False)

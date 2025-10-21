@@ -3,124 +3,135 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Meu Chat IA</title>
+  <title>BudIA • Chat & Previsões</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='previsoes.css') }}">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-  <!-- Sidebar única do app (igual para todas as views) -->
+  <!-- Sidebar -->
   <aside id="sidebar">
-    <div class="brand">MeuChat<span>IA</span></div>
+    <div class="brand">
+      <div class="brand-mark">V</div>
+      <div class="brand-name">Bud<span>IA</span></div>
+    </div>
 
-    <button id="novo-chat" class="primary">+ Novo chat</button>
+    <div class="side-actions">
+      <button id="novo-chat" class="btn primary">+ Novo chat</button>
+      <div class="side-row">
+        <button id="renomear-chat" class="btn soft">Renomear</button>
+        <button id="apagar-chat" class="btn danger">Apagar</button>
+      </div>
+      <div class="side-row">
+        <button id="limpar-chat" class="btn outline">Limpar mensagens</button>
+      </div>
+    </div>
 
-    <nav class="nav">
+    <div class="nav">
       <button class="nav-item active" data-view="chat-view">💬 Conversa</button>
       <button class="nav-item" data-view="previsoes-view">📈 Previsões</button>
-    </nav>
+    </div>
 
     <div class="threads">
-      <div class="threads-title">Seus chats</div>
+      <div class="threads-head">
+        <div class="threads-title">Seus chats</div>
+        <input id="thread-search" type="search" placeholder="Buscar chats..." />
+      </div>
       <ul id="thread-list"></ul>
+      <div class="threads-foot">
+        <span id="thread-count">0 chats</span>
+      </div>
     </div>
   </aside>
 
   <main id="main">
-    <!-- View: Chat principal (inalterado) -->
+    <!-- View: Chat -->
     <section id="chat-view" class="view active">
       <header class="topbar">
-        <h1>Buds Chat</h1>
-        <button id="limpar-chat" class="soft">Limpar</button>
+        <h1 id="chat-title">Buds Chat</h1>
+        <div class="top-actions">
+          <button id="exportar-chat" class="btn soft" title="Exportar chat como .txt">Exportar</button>
+          <button id="limpar-chat-2" class="btn outline" title="Limpar mensagens do chat atual">Limpar</button>
+        </div>
       </header>
 
-      <div id="chat"></div>
+      <div id="chat" class="chat-scroller"></div>
 
       <form id="formulario" class="composer">
         <textarea id="mensagem" placeholder="Digite sua pergunta..." rows="1"></textarea>
-        <button type="submit" id="enviar">Enviar</button>
+        <div class="composer-right">
+          <span id="tokens-hint" class="hint">↵ Enviar • Shift+↵ quebra linha</span>
+          <button type="submit" id="enviar" class="btn primary">Enviar</button>
+        </div>
       </form>
     </section>
 
-    <!-- View: Previsões (remodelado) -->
-    
-    <!-- View: Previsões (remodelado) -->
-<section id="previsoes-view" class="view">
-  <header class="topbar">
-    <h1>Previsões (experimental)</h1>
-    <div class="actions pv-actions">
-      <div class="pv-segment" role="group" aria-label="Intervalo">
-        <button class="seg-btn pv-range active" data-days="7">7d</button>
-        <button class="seg-btn pv-range" data-days="14">14d</button>
-        <button class="seg-btn pv-range" data-days="30">30d</button>
-      </div>
+    <!-- View: Previsões -->
+    <section id="previsoes-view" class="view">
+      <header class="topbar">
+        <h1>Previsões (experimental)</h1>
+        <div class="actions pv-actions">
+          <div class="pv-segment" role="group" aria-label="Intervalo">
+            <button class="seg-btn pv-range active" data-days="7">7d</button>
+            <button class="seg-btn pv-range" data-days="14">14d</button>
+            <button class="seg-btn pv-range" data-days="30">30d</button>
+          </div>
 
-      <label class="pv-toggle">
-        <input type="checkbox" id="pv-mm" checked>
-        <span>Média móvel 3d</span>
-      </label>
+          <label class="pv-toggle">
+            <input type="checkbox" id="pv-mm" checked>
+            <span>Média móvel 3d</span>
+          </label>
 
-      <button id="pv-export" class="soft" title="Exportar CSV">Exportar</button>
-      <button id="pv-limpar" class="soft" title="Limpar">Limpar</button>
-    </div>
-  </header>
-
-  <div class="previsoes-layout">
-    <!-- Painel da conversa + histórico -->
-    <div class="pv-panel">
-      <div id="pv-log" class="pv-log"></div>
-
-      <div class="pv-history">
-        <div class="pv-history-head">
-          <span>Histórico de temas</span>
-          <button id="pv-clear-history" class="linkish" title="Limpar histórico">limpar</button>
+          <button id="pv-export" class="btn soft" title="Exportar CSV">Exportar</button>
+          <button id="pv-limpar" class="btn outline" title="Limpar dashboard">Limpar</button>
         </div>
-        <ul id="pv-historico" class="pv-historico"></ul>
-      </div>
+      </header>
 
-      <form id="pv-form" class="composer pv-composer">
-        <input id="pv-tema" placeholder="Tema (ex.: IA no Brasil, petróleo, inflação…)" />
-        <button type="submit">Analisar</button>
-      </form>
-    </div>
+      <div class="previsoes-layout">
+        <!-- Painel da conversa + histórico -->
+        <div class="pv-panel">
+          <div id="pv-log" class="pv-log"></div>
 
-    <!-- Painel do gráfico + artigos -->
-    <div class="pv-analytics">
-      <div class="pv-card">
-        <div class="pv-card-head">
-          <div class="pv-card-title">Volume de notícias por dia</div>
-          <div class="pv-legend">
-            <span class="dot dot-count"></span> Matérias/dia
-            <span class="dot dot-ma"></span> MM 3d
+          <div class="pv-history">
+            <div class="pv-history-head">
+              <span>Histórico de temas</span>
+              <button id="pv-clear-history" class="linkish" title="Limpar histórico">limpar</button>
+            </div>
+            <ul id="pv-historico" class="pv-historico"></ul>
+          </div>
+
+          <form id="pv-form" class="composer pv-composer">
+            <input id="pv-tema" placeholder="Tema (ex.: IA no Brasil, petróleo, inflação…)" />
+            <button type="submit" class="btn primary">Analisar</button>
+          </form>
+        </div>
+
+        <!-- Painel do gráfico + artigos -->
+        <div class="pv-analytics">
+          <div class="pv-card">
+            <div class="pv-card-head">
+              <div class="pv-card-title">Volume de notícias por dia</div>
+              <div class="pv-legend">
+                <span class="dot dot-count"></span> Matérias/dia
+                <span class="dot dot-ma"></span> MM 3d
+              </div>
+            </div>
+
+            <div class="pv-stats"></div>
+            <canvas id="pv-canvas"></canvas>
+          </div>
+
+          <div class="pv-card pv-articles-card">
+            <div class="pv-card-title">Artigos recentes</div>
+            <div id="pv-articles" class="pv-articles"></div>
           </div>
         </div>
-
-        <!-- 🔥 KPIs agora no local certo -->
-        <div class="pv-stats">
-          <div class="pv-stat"><div class="label">Tendência</div><div class="value" id="pv-tendencia">Alta ↑</div></div>
-          <div class="pv-stat"><div class="label">Δ Diário</div><div class="value" id="pv-delta">+3</div></div>
-          <div class="pv-stat"><div class="label">Chances</div><div class="value" id="pv-chances">75%</div></div>
-        </div>
-
-        <canvas id="pv-canvas"></canvas>
       </div>
-
-      <div class="pv-card pv-articles-card">
-        <div class="pv-card-title">Artigos recentes</div>
-        <div id="pv-articles" class="pv-articles"></div>
-      </div>
-    </div>
-  </div>
-</section>
-
-
-
+    </section>
   </main>
 
-  <!-- Seu JS do chat principal (inalterado) -->
   <script src="{{ url_for('static', filename='script.js') }}"></script>
-  <!-- Novo JS só do módulo Previsões -->
   <script src="{{ url_for('static', filename='previsoes.js') }}"></script>
 </body>
 </html>

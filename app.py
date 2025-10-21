@@ -1,9 +1,14 @@
-import os, sys, json, logging, time, math, statistics, requests
+import os, sys, json, logging, time, math, statistics, re, requests
 from pathlib import Path
-from urllib.parse import quote_plus
+from urllib.parse import quote_plus, urlparse
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
-from flask import Flask, render_template, request, jsonify
+from functools import lru_cache
+
+from flask import Flask, render_template, request, jsonify, Response, stream_with_context
+
+# Multi-provedor (Gemini / Ollama)
+from providers import call_llm
 
 logging.basicConfig(level=logging.INFO, stream=sys.stdout)
 
@@ -26,6 +31,9 @@ MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 API_BASE   = os.getenv("GEMINI_API_BASE", "https://generativelanguage.googleapis.com")
 API_URL    = f"{API_BASE}/v1beta/models/{MODEL_NAME}:generateContent"
 
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "gemini").lower()
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "phi4")
+
 def get_api_key() -> str:
     return (os.getenv("GEMINI_API_KEY") or "").strip()
 
@@ -47,7 +55,7 @@ BOT_PERSONA = (
     "e proponha hipóteses testáveis com validações rápidas e baratas."
 )
 
-# --- Helpers LLM ------------------------------------------------------------
+# --- Helpers LLM (para refino Gemini opcional) ------------------------------
 def _extract_texts(data: dict) -> str:
     texts = []
     for cand in data.get("candidates", []):
@@ -72,58 +80,244 @@ def _mask(s: str) -> str:
     s = s.strip()
     return (s[:6] + "…" + s[-4:]) if len(s) > 10 else "****"
 
-# --- Web (views) ------------------------------------------------------------
+# ===================== RAG LOCAL (embeddings se disponível; fallback TF-IDF) =====================
+EMBED_ON = False
+EMBED_MODEL_NAME = os.getenv("EMBED_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
+_embeddings = None
+_vec = None
+_docs = []          # lista de strings
+_embs = None        # numpy array (n_docs x dim) normalizado
+
+def _load_corpus():
+    """Carrega textos de ./data/*.txt (corta p/ segurança)"""
+    global _docs
+    _docs = []
+    data_dir = Path("data")
+    if data_dir.exists():
+        for p in data_dir.glob("*.txt"):
+            try:
+                t = p.read_text(encoding="utf-8", errors="ignore")
+                t = t.strip()
+                if t:
+                    _docs.append(t[:6000])
+            except Exception:
+                logging.exception("Falha lendo %s", p)
+    logging.info("RAG: %s docs em ./data", len(_docs))
+
+def _boot_embeddings():
+    """Tenta carregar SentenceTransformers; senão, cai em TF-IDF."""
+    global EMBED_ON, _embeddings, _embs, _vec
+    _load_corpus()
+    if not _docs:
+        logging.info("RAG: sem documentos; contexto ficará vazio.")
+        return
+    try:
+        from sentence_transformers import SentenceTransformer
+        import numpy as np
+        _embeddings = SentenceTransformer(EMBED_MODEL_NAME)
+        embs = _embeddings.encode(_docs, convert_to_numpy=True, normalize_embeddings=True)
+        _embs = embs
+        EMBED_ON = True
+        logging.info("RAG: embeddings ON (%s) para %s docs", EMBED_MODEL_NAME, len(_docs))
+    except Exception:
+        logging.warning("RAG: embeddings OFF, usando TF-IDF")
+        EMBED_ON = False
+        try:
+            from sklearn.feature_extraction.text import TfidfVectorizer
+            _vec = TfidfVectorizer(stop_words="portuguese").fit(_docs)
+            logging.info("RAG: TF-IDF pronto (%s docs)", len(_docs))
+        except Exception:
+            logging.exception("RAG: TF-IDF indisponível")
+
+def _rag_topk(query: str, k=5):
+    """Retorna top-k trechos de contexto por similaridade."""
+    if not _docs:
+        return []
+    try:
+        if EMBED_ON and _embeddings is not None and _embs is not None:
+            import numpy as np
+            q = _embeddings.encode([query], convert_to_numpy=True, normalize_embeddings=True)[0]
+            sims = (_embs @ q)  # cos sim porque normalizado
+            idx = sims.argsort()[::-1][:k]
+            return [(_docs[i], float(sims[i])) for i in idx]
+        else:
+            if _vec is None:
+                return []
+            from sklearn.feature_extraction.text import TfidfVectorizer  # import para mypy
+            dv = _vec.transform(_docs)
+            qv = _vec.transform([query])
+            scores = (qv @ dv.T).toarray()[0]
+            idx = scores.argsort()[::-1][:k]
+            return [(_docs[i], float(scores[i])) for i in idx]
+    except Exception:
+        logging.exception("RAG: falha no topk")
+        return []
+
+def _compose_with_context(query: str) -> str:
+    hits = _rag_topk(query, k=5)
+    ctx_parts = [t for (t, _) in hits][:3]
+    if ctx_parts:
+        context = "\n\n---\n".join(ctx_parts)
+        return f"Use estritamente o contexto abaixo para responder com precisão.\n\n[CONTEXTO]\n{context}\n\n[PERGUNTA]\n{query}"
+    return query
+
+# ===================== Ferramentas gratuitas (slash-commands) =====================
+SAFE_HOSTS = set([
+    "raw.githubusercontent.com","data.gov.br","dados.gov.br",
+    "www.gov.br","g1.globo.com","www1.folha.uol.com.br"
+])
+
+def _safe_http_get(url:str, timeout=(5,10)):
+    try:
+        u = urlparse(url)
+        if u.scheme not in ("http","https"): return None
+        if u.netloc not in SAFE_HOSTS: return None
+        r = requests.get(url, timeout=timeout)
+        r.raise_for_status()
+        return r.text[:10000]
+    except Exception:
+        return None
+
+def _calc(expr:str):
+    if not re.fullmatch(r"[0-9\.\+\-\*\/\(\)\s%]+", expr):
+        raise ValueError("Expressão inválida")
+    return str(eval(expr))
+
+def _rss_search(q:str, n=10):
+    try:
+        url = f"https://news.google.com/rss/search?q={quote_plus(q)}&hl=pt-BR&gl=BR&ceid=BR:pt-419"
+        r = requests.get(url, timeout=(5,10)); r.raise_for_status()
+        import xml.etree.ElementTree as ET
+        root=ET.fromstring(r.text); out=[]
+        for it in root.findall(".//item")[:n]:
+            out.append({"title": it.findtext("title") or "", "link": it.findtext("link") or ""})
+        return out
+    except Exception:
+        return []
+
+# ===================== Cache semântico + Draft->Critic =====================
+def _norm(s:str) -> str:
+    return " ".join((s or "").lower().split())[:2000]
+
+@lru_cache(maxsize=256)
+def _cached_answer(norm_q:str, prompt:str, persona:str, cfg_tuple:tuple):
+    return call_llm(prompt, persona, {
+        "temperature": cfg_tuple[0], "topP": cfg_tuple[1], "maxOutputTokens": cfg_tuple[2]
+    })
+
+# ===================== Web (views) =====================
 @app.get("/")
 def index():
     return render_template("index.html")
 
+# ---- Chat síncrono (com RAG, ferramentas, draft+critic) ----
 @app.post("/responder")
 def responder():
-    if not get_api_key():
-        return jsonify({"resposta": "Servidor sem GEMINI_API_KEY configurada."}), 500
-
     dados = request.get_json(force=True) or {}
     pergunta = (dados.get("mensagem") or "").strip()
     if not pergunta:
         return jsonify({"resposta": "Manda a pergunta"}), 400
 
-    try:
-        resp = _call_gemini(pergunta)
-    except Exception as e:
-        logging.exception("Falha na requisição ao Gemini")
-        return jsonify({"resposta": f"Ocorreu um erro de rede: {e}"}), 200
-
-    if resp.status_code != 200:
+    # Slash-commands (barato e direto)
+    if pergunta.startswith("/calc "):
         try:
-            err = resp.json().get("error", {})
-            msg = err.get("message") or resp.text
-        except Exception:
-            msg = resp.text
-        logging.warning("Gemini HTTP %s: %s", resp.status_code, msg)
-        low = (msg or "").lower()
-        if "expired" in low or "revoked" in low:
-            return jsonify({"resposta": "A chave de API está expirada/revogada. Atualize GEMINI_API_KEY no .env e reinicie."}), 200
-        return jsonify({"resposta": f"Erro {resp.status_code}: {msg}"}), 200
+            return jsonify({"resposta": _calc(pergunta[6:])}), 200
+        except Exception as e:
+            return jsonify({"resposta": f"Erro no calc: {e}"}), 200
 
-    body = resp.json()
-    pf = body.get("promptFeedback") or {}
-    if pf.get("blockReason"):
-        return jsonify({"resposta": f"Pedido bloqueado pela política ({pf.get('blockReason')})."}), 200
+    if pergunta.startswith("/http "):
+        txt = _safe_http_get(pergunta[6:].strip())
+        return jsonify({"resposta": txt or "URL não permitida ou vazia."}), 200
 
-    text = _extract_texts(body)
-    if not text:
-        logging.warning("Sem texto na resposta:\n%s", json.dumps(body, ensure_ascii=False, indent=2))
-        return jsonify({"resposta": "Não consegui gerar texto agora. Tenta reformular a pergunta."}), 200
+    if pergunta.startswith("/rss "):
+        items = _rss_search(pergunta[5:].strip(), n=8)
+        if not items: return jsonify({"resposta":"Nada encontrado."}), 200
+        lista = "\n".join([f"- [{i['title']}]({i['link']})" for i in items])
+        return jsonify({"resposta": f"**RSS** sobre “{pergunta[5:].strip()}”:\n\n{lista}"}), 200
 
-    return jsonify({"resposta": text}), 200
+    # Prompt com contexto (RAG)
+    gen = get_gen_cfg()
+    cfg_tuple = (gen["temperature"], gen["topP"], gen["maxOutputTokens"])
+    final_prompt = _compose_with_context(pergunta)
+    norm_q = _norm(final_prompt)
+
+    try:
+        draft = _cached_answer(norm_q, final_prompt, BOT_PERSONA, cfg_tuple)
+        if not draft:
+            draft = "Não consegui gerar resposta agora. Tente reformular a pergunta."
+    except Exception as e:
+        logging.exception("Falha no draft")
+        draft = f"Erro na geração: {e}"
+
+    # Crítica curta (segundo passo) – eleva consistência
+    try:
+        critic_prompt = (
+          "Revise a resposta abaixo para corrigir erros e torná-la mais útil. "
+          "Se estiver incerto, seja explícito e proponha verificação. "
+          "Responda em **Markdown** e de forma direta.\n\n"
+          f"Pergunta: {pergunta}\n\nRascunho:\n{draft}\n\nFinal:"
+        )
+        final = call_llm(critic_prompt, BOT_PERSONA, gen) or draft
+    except Exception:
+        logging.exception("Falha na crítica; devolvendo rascunho")
+        final = draft
+
+    return jsonify({"resposta": final}), 200
+
+# ---- Chat streaming (SSE) ----
+@app.get("/responder_stream")
+def responder_stream():
+    q = (request.args.get("q") or "").strip()
+    if not q:
+        return Response("event: error\ndata: Falta parâmetro q\n\n", mimetype="text/event-stream")
+
+    def gen():
+        yield "event: start\ndata: {}\n\n"
+        try:
+            if LLM_PROVIDER == "ollama":
+                # Streaming nativo via Ollama
+                payload = {
+                    "model": OLLAMA_MODEL,
+                    "prompt": f"<<SYS>>\n{BOT_PERSONA}\n<</SYS>>\n\n{q}",
+                    "stream": True,
+                    "options": {"temperature": float(get_gen_cfg()["temperature"])}
+                }
+                with requests.post("http://127.0.0.1:11434/api/generate", json=payload, stream=True, timeout=(10, 180)) as r:
+                    r.raise_for_status()
+                    for line in r.iter_lines(decode_unicode=True):
+                        if not line: continue
+                        try:
+                            obj = json.loads(line)
+                            chunk = obj.get("response","")
+                            if chunk:
+                                yield f"data: {json.dumps({'delta': chunk})}\n\n"
+                        except Exception:
+                            pass
+                yield "event: end\ndata: {}\n\n"
+            else:
+                # Gemini v1beta sem stream -> chunking local
+                text = call_llm(q, BOT_PERSONA, get_gen_cfg()) or ""
+                for part in [text[i:i+220] for i in range(0, len(text), 220)]:
+                    yield f"data: {json.dumps({'delta': part})}\n\n"
+                yield "event: end\ndata: {}\n\n"
+        except Exception as e:
+            yield f"event: error\ndata: {str(e)}\n\n"
+
+    return Response(stream_with_context(gen()), mimetype="text/event-stream")
 
 @app.get("/health")
 def health():
     return jsonify({
-        "ok": bool(get_api_key()),
-        "model": MODEL_NAME,
-        "api_key_masked": _mask(get_api_key()),
+        "provider": LLM_PROVIDER,
+        "ollama_model": OLLAMA_MODEL if LLM_PROVIDER=="ollama" else None,
+        "ok": True if (LLM_PROVIDER=="ollama" or get_api_key()) else False,
+        "model": MODEL_NAME if LLM_PROVIDER=="gemini" else None,
+        "api_key_masked": _mask(get_api_key()) if LLM_PROVIDER=="gemini" else None,
         "gen_cfg": get_gen_cfg(),
+        "rag": {
+            "embeddings": bool(EMBED_ON),
+            "docs": len(_docs)
+        }
     })
 
 # ===================== CÉREBRO “PREVISÕES” (sem custos) =====================
@@ -357,7 +551,6 @@ def prever():
 
     # 2) série de contagens por dia
     series = _build_series(artigos, dias)
-    # garante ordenação e integridade
     series = sorted(series, key=lambda p: p["date"])
     vals = [int(p.get("count", 0)) for p in series] or [0]
 
@@ -385,13 +578,34 @@ def prever():
             "fonte": a["url"].split('/')[2] if '//' in a["url"] else ''
         })
 
-    # 6) resposta JSON estável
+    # 6) extras grátis: sentimento e picos
+    def _sentiment(items):
+        try:
+            from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+            an = SentimentIntensityAnalyzer()
+            scores = [an.polarity_scores(i["titulo"])["compound"] for i in items]
+            return scores
+        except Exception:
+            return [0.0 for _ in items]
+
+    sent = _sentiment(artigos)
+    sent_mean = round(sum(sent)/max(1,len(sent)), 3) if sent else 0.0
+
+    mu = sum(vals)/max(1,len(vals))
+    sd = (sum((x-mu)**2 for x in vals)/max(1,len(vals)))**0.5 if vals else 0.0
+    spikes = [series[i]["date"] for i,x in enumerate(vals) if sd>1e-6 and (x-mu)/sd >= 2.0]
+
+    # 7) resposta JSON estável
     resp = {
         "previsao": previsao_txt,
-        "series": series,               # [{ date: "YYYY-MM-DD", count: int }]
-        "trend": trend,                 # { slope, pct, last_delta, confidence, score }
-        "artigos": artigos_out,         # [{ titulo, url, data_iso, fonte }]
-        "hipoteses": hipoteses,         # sugestões rule-based
+        "series": series,
+        "trend": trend,
+        "artigos": artigos_out,
+        "hipoteses": hipoteses,
+        "analytics": {
+            "sentiment_mean": sent_mean,
+            "spikes": spikes
+        },
         "meta": {
             "tema": tema,
             "dias": dias,
@@ -403,10 +617,20 @@ def prever():
         }
     }
 
-    logging.info("[/prever] tema='%s' dias=%s -> pontos=%s artigos=%s trend=%s%% (Δ=%s)",
-                 tema, dias, len(series), len(artigos_out), resp["trend"]["pct"], resp["trend"]["last_delta"])
+    logging.info("[/prever] tema='%s' dias=%s -> pontos=%s artigos=%s trend=%s%% (Δ=%s) sent=%.3f spikes=%s",
+                 tema, dias, len(series), len(artigos_out), resp["trend"]["pct"], resp["trend"]["last_delta"],
+                 sent_mean, len(spikes))
 
     return jsonify(resp), 200
+
+# --- Boot RAG ---------------------------------------------------------------
+def _bootstrap_rag():
+    try:
+        _boot_embeddings()
+    except Exception:
+        logging.exception("Falha ao inicializar RAG")
+
+_bootstrap_rag()
 
 # --- Main -------------------------------------------------------------------
 if __name__ == "__main__":

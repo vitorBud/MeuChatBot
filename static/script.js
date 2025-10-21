@@ -1,39 +1,49 @@
+// =========================
+// BudIA – Core (Chat + Sidebar)
+// =========================
+
 // ---------- Seletores ----------
 const chat = document.getElementById('chat');
 const formulario = document.getElementById('formulario');
 const mensagemInput = document.getElementById('mensagem');
 const enviarBtn = document.getElementById('enviar');
-const limparBtn = document.getElementById('limpar-chat');
 
 const novoChatBtn = document.getElementById('novo-chat');
+const renomearChatBtn = document.getElementById('renomear-chat');
+const apagarChatBtn = document.getElementById('apagar-chat');
+const limparChatBtn = document.getElementById('limpar-chat');
+const limparChatBtnTop = document.getElementById('limpar-chat-2');
+const exportarChatBtn = document.getElementById('exportar-chat');
+
+const threadSearch = document.getElementById('thread-search');
 const threadList = document.getElementById('thread-list');
+const threadCount = document.getElementById('thread-count');
+const chatTitle = document.getElementById('chat-title');
+
 const navItems = document.querySelectorAll('.nav-item');
 
+// Views
 const chatView = document.getElementById('chat-view');
 const previsoesView = document.getElementById('previsoes-view');
 
-const pvForm = document.getElementById('pv-form');
-const pvTema = document.getElementById('pv-tema');
-const pvLog = document.getElementById('pv-log');
-const pvCanvas = document.getElementById('pv-canvas');
-const pvArticles = document.getElementById('pv-articles');
-
-let pvChart = null;
-
 // ---------- Estado / Threads ----------
 const state = {
-  threads: {},        // {id: {title, messages:[{role,text}], createdAt}}
-  currentId: null
+  threads: {},        // {id: {title, messages:[{role,text,at}], createdAt}}
+  currentId: null,
+  version: 'v2'
 };
 
-function uid() { return 't_' + Math.random().toString(36).slice(2, 9); }
-function nowISO(){ return new Date().toISOString(); }
+const storageKey = 'threads_v2';
 
-function loadState(){
+const uid = () => 't_' + Math.random().toString(36).slice(2, 9);
+const nowISO = () => new Date().toISOString();
+
+function loadState() {
   try {
-    const raw = localStorage.getItem('threads_v1');
+    const raw = localStorage.getItem(storageKey);
     if (raw) {
-      state.threads = JSON.parse(raw);
+      const parsed = JSON.parse(raw);
+      state.threads = parsed || {};
       const ids = Object.keys(state.threads);
       state.currentId = ids[0] || null;
     } else {
@@ -46,57 +56,128 @@ function loadState(){
     state.threads = {};
   }
 }
-function saveState(){ localStorage.setItem('threads_v1', JSON.stringify(state.threads)); }
 
-function setCurrent(id){
+function saveState() {
+  localStorage.setItem(storageKey, JSON.stringify(state.threads));
+}
+
+function setCurrent(id) {
   state.currentId = id;
   renderThreadList();
   renderChat();
 }
 
-function newThread(){
+function newThread() {
   const id = uid();
   state.threads[id] = { title: 'Novo chat', messages: [], createdAt: nowISO() };
   saveState();
   setCurrent(id);
 }
 
-function renderThreadList(){
-  threadList.innerHTML = '';
-  const entries = Object.entries(state.threads)
-    .sort((a,b)=> (b[1].createdAt||'') .localeCompare(a[1].createdAt||''));
-  for (const [id, t] of entries){
-    const li = document.createElement('li');
-    if (id === state.currentId) li.classList.add('active');
-    const first = t.messages.find(m => m.role==='user')?.text || t.title || 'Novo chat';
-    const preview = t.messages.at(-1)?.text || '';
-    li.innerHTML = `<div class="title">${first.slice(0,40)}</div><div class="preview">${preview.slice(0,60)}</div>`;
-    li.addEventListener('click', ()=> setCurrent(id));
-    threadList.appendChild(li);
+function renameCurrent() {
+  const cur = state.threads[state.currentId];
+  if (!cur) return;
+  const novo = prompt('Novo título do chat:', cur.title || 'Meu chat');
+  if (novo && novo.trim()) {
+    cur.title = novo.trim();
+    saveState();
+    renderThreadList();
+    renderChat();
   }
 }
 
-function renderChat(){
+function deleteCurrent() {
+  const cur = state.threads[state.currentId];
+  if (!cur) return;
+  if (!confirm('Tem certeza que deseja APAGAR este chat? Essa ação não pode ser desfeita.')) return;
+  delete state.threads[state.currentId];
+  const firstId = Object.keys(state.threads)[0];
+  if (firstId) {
+    state.currentId = firstId;
+  } else {
+    const id = uid();
+    state.threads[id] = { title: 'Novo chat', messages: [], createdAt: nowISO() };
+    state.currentId = id;
+  }
+  saveState();
+  renderThreadList();
+  renderChat();
+}
+
+function clearMessages() {
+  const cur = state.threads[state.currentId];
+  if (!cur) return;
+  if (!confirm('Limpar todas as mensagens deste chat?')) return;
+  cur.messages = [];
+  saveState();
+  renderChat();
+}
+
+function exportCurrent() {
+  const cur = state.threads[state.currentId];
+  if (!cur) return;
+  const lines = [];
+  lines.push(`# ${cur.title || 'Chat'} — exportado em ${new Date().toLocaleString('pt-BR')}`);
+  lines.push('');
+  for (const m of cur.messages) {
+    const who = m.role === 'user' ? 'Você' : 'Bot';
+    lines.push(`[${who}] ${m.text}`);
+  }
+  const blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const name = (cur.title || 'chat').toLowerCase().replace(/[^\w\-]+/g, '-');
+  a.href = url; a.download = `${name}.txt`;
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function renderThreadList(filter = '') {
+  threadList.innerHTML = '';
+  const entries = Object.entries(state.threads)
+    .sort((a, b) => (b[1].createdAt || '').localeCompare(a[1].createdAt || ''));
+
+  let shown = 0;
+  for (const [id, t] of entries) {
+    const first = t.messages.find(m => m.role === 'user')?.text || t.title || 'Novo chat';
+    const preview = t.messages.at(-1)?.text || '';
+    const hay = (first + ' ' + preview + ' ' + (t.title || '')).toLowerCase();
+    if (filter && !hay.includes(filter.toLowerCase())) continue;
+
+    const li = document.createElement('li');
+    if (id === state.currentId) li.classList.add('active');
+    li.innerHTML = `
+      <div class="title">${(t.title || first).slice(0, 40)}</div>
+      <div class="preview">${preview.slice(0, 60)}</div>`;
+    li.addEventListener('click', () => setCurrent(id));
+    threadList.appendChild(li);
+    shown++;
+  }
+  threadCount.textContent = `${shown} chat${shown === 1 ? '' : 's'}`;
+}
+
+function renderChat() {
   chat.innerHTML = '';
   const cur = state.threads[state.currentId];
   if (!cur) return;
-  for (const msg of cur.messages){
+  chatTitle.textContent = cur.title || 'Buds Chat';
+  for (const msg of cur.messages) {
     addMessage(msg.text, msg.role === 'user' ? 'user' : 'bot', false);
   }
   chat.scrollTop = chat.scrollHeight;
 }
 
 // ---------- UI helpers ----------
-function typeWriterEffect(element, text, speed = 5) {
+function typeWriterEffect(element, text, speed = 2) {
   let i = 0;
-  (function typing(){
+  (function typing() {
     if (i < text.length) {
       element.textContent += text.charAt(i++);
       setTimeout(typing, speed);
     }
   })();
 }
-function addMessage(text, cls, effect=false){
+function addMessage(text, cls, effect = false) {
   const msg = document.createElement('div');
   msg.classList.add('mensagem', cls);
   if (effect) typeWriterEffect(msg, text); else msg.textContent = text;
@@ -104,17 +185,34 @@ function addMessage(text, cls, effect=false){
   chat.scrollTop = chat.scrollHeight;
 }
 
+// Auto-size do textarea
+function autosize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 220) + 'px';
+}
+mensagemInput.addEventListener('input', () => autosize(mensagemInput));
+
 // ---------- Enviar mensagem ao backend ----------
-formulario.addEventListener('submit', async (e)=>{
+formulario.addEventListener('submit', async (e) => {
   e.preventDefault();
   const txt = mensagemInput.value.trim();
   if (!txt) return;
   mensagemInput.value = "";
+  autosize(mensagemInput);
 
   const cur = state.threads[state.currentId];
-  cur.messages.push({role:'user', text: txt, at: nowISO()});
+  cur.messages.push({ role: 'user', text: txt, at: nowISO() });
   saveState();
   addMessage("Você: " + txt, "user");
+
+  // feedback de envio
+  enviarBtn.disabled = true;
+  const loadingText = "Bot: pensando…";
+  const thinking = document.createElement('div');
+  thinking.className = 'mensagem bot';
+  thinking.textContent = loadingText;
+  chat.appendChild(thinking);
+  chat.scrollTop = chat.scrollHeight;
 
   try {
     const res = await fetch("/responder", {
@@ -122,108 +220,55 @@ formulario.addEventListener('submit', async (e)=>{
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ mensagem: txt })
     });
-    const data = await res.json();
+    const data = await res.json().catch(() => ({ resposta: 'Sem resposta.' }));
+    thinking.remove();
     const botTxt = "Bot: " + (data.resposta || "Sem resposta.");
-    cur.messages.push({role:'bot', text: botTxt, at: nowISO()});
+    cur.messages.push({ role: 'bot', text: botTxt, at: nowISO() });
     saveState();
     addMessage(botTxt, "bot", true);
-  } catch (err){
+  } catch (err) {
+    thinking.remove();
     const botTxt = "Bot: Erro ao tentar responder.";
-    cur.messages.push({role:'bot', text: botTxt, at: nowISO()});
+    cur.messages.push({ role: 'bot', text: botTxt, at: nowISO() });
     saveState();
     addMessage(botTxt, "bot");
+  } finally {
+    enviarBtn.disabled = false;
   }
 });
 
 // Enter envia (sem Shift)
-mensagemInput.addEventListener('keydown', (e)=>{
-  if (e.key === 'Enter' && !e.shiftKey){
+mensagemInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();
     enviarBtn.click();
   }
 });
 
-// Limpar chat atual
-limparBtn.addEventListener('click', ()=>{
-  const cur = state.threads[state.currentId];
-  if (!cur) return;
-  cur.messages = [];
-  saveState();
-  renderChat();
+// Ações globais
+novoChatBtn?.addEventListener('click', newThread);
+renomearChatBtn?.addEventListener('click', renameCurrent);
+apagarChatBtn?.addEventListener('click', deleteCurrent);
+limparChatBtn?.addEventListener('click', clearMessages);
+limparChatBtnTop?.addEventListener('click', clearMessages);
+exportarChatBtn?.addEventListener('click', exportCurrent);
+
+// Busca de chats
+threadSearch?.addEventListener('input', (e) => {
+  renderThreadList(e.target.value.trim());
 });
 
-// Novo chat
-novoChatBtn.addEventListener('click', newThread);
-
 // Navegação entre views
-navItems.forEach(btn=>{
-  btn.addEventListener('click', ()=>{
+document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+chatView.classList.add('active');
+navItems.forEach(btn => {
+  btn.addEventListener('click', () => {
     navItems.forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     const view = btn.dataset.view;
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
     document.getElementById(view).classList.add('active');
   });
-});
-
-// ---------- Previsões ----------
-function pvAdd(text, role='bot'){
-  const div = document.createElement('div');
-  div.classList.add('mensagem', role==='user' ? 'user' : 'bot');
-  div.textContent = text;
-  pvLog.appendChild(div);
-  pvLog.scrollTop = pvLog.scrollHeight;
-}
-
-function renderChart(series){
-  const labels = series.map(p => p.date);
-  const data = series.map(p => p.count);
-  if (pvChart){ pvChart.destroy(); }
-  pvChart = new Chart(pvCanvas.getContext('2d'), {
-    type: 'line',
-    data: {
-      labels,
-      datasets: [{ label: 'Matérias/dia', data }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      scales: {
-        x: { ticks: { autoSkip: true, maxTicksLimit: 7 } },
-        y: { beginAtZero: true, suggestedMax: Math.max(3, Math.max(...data)+1) }
-      }
-    }
-  });
-}
-
-pvForm.addEventListener('submit', async (e)=>{
-  e.preventDefault();
-  const tema = pvTema.value.trim();
-  if (!tema) return;
-  pvTema.value = "";
-  pvAdd("Você: " + tema, 'user');
-  pvAdd("Bot: coletando manchetes e montando série...", 'bot');
-
-  try{
-    const res = await fetch('/prever', {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ tema })
-    });
-    const data = await res.json();
-    if (data.erro){ pvAdd("Bot: " + data.erro, 'bot'); return; }
-
-    pvAdd("Bot: " + (data.previsao || "Sem resumo."), 'bot');
-    renderChart(data.series || []);
-
-    // lista de artigos
-    pvArticles.innerHTML = (data.artigos || []).map(a=>{
-      const d = new Date(a.data_iso).toLocaleString('pt-BR');
-      return `<div>• <a href="${a.url}" target="_blank" rel="noopener">${a.titulo}</a> <span style="color:#8aa0bf">(${d})</span></div>`;
-    }).join('');
-  } catch(err){
-    pvAdd("Bot: erro ao consultar /prever", 'bot');
-  }
 });
 
 // ---------- Boot ----------

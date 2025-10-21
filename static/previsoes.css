@@ -1,19 +1,16 @@
 /* =========================
-   Layout principal
+   Layout principal (clean)
 ========================= */
 .previsoes-layout {
   display: grid;
-  gap: 22px;
-  padding: 20px;
+  gap: 18px;
+  padding: 16px;
   width: 100%;
   grid-template-columns: 1fr 1.4fr;
-  height: calc(100vh - 64px);
-  background: radial-gradient(circle at top left, rgba(102,163,255,.05), transparent 60%);
+  background: transparent;
+  min-height: calc(100vh - 56px);
 }
 
-/* =========================
-   Topbar Controls
-========================= */
 .pv-actions {
   display: flex;
   align-items: center;
@@ -22,12 +19,13 @@
 
 .pv-segment {
   display: inline-flex;
-  border: 1px solid var(--line-2);
-  background: rgba(20,30,50,.6);
-  border-radius: 12px;
+  gap: 0;
+  border: 1px solid var(--line);
+  background: #0f141a;
+  border-radius: var(--r-sm);
   overflow: hidden;
-  box-shadow: inset 0 0 6px rgba(102,163,255,.08);
 }
+
 .seg-btn {
   padding: 8px 14px;
   border: 0;
@@ -35,11 +33,21 @@
   color: var(--text);
   cursor: pointer;
   font-weight: 600;
-  transition: background .2s ease, color .2s ease;
+  border-right: 1px solid var(--line);
 }
+
+.seg-btn:last-child {
+  border-right: 0;
+}
+
+.seg-btn:hover {
+  background: #131a22;
+}
+
 .seg-btn.active {
-  background: linear-gradient(90deg, rgba(102,163,255,.25), rgba(143,125,255,.3));
-  color: #fff;
+  background: #0f6d56;
+  color: #e9f7f2;
+  border-right-color: #0f5a47;
 }
 
 .pv-toggle {
@@ -49,72 +57,59 @@
   font-size: 13px;
   color: #d6e6ff;
 }
-.pv-toggle input { accent-color: var(--brand); }
 
-#pv-export, #pv-limpar {
-  border: 1px solid var(--line-2);
-  background: rgba(15,22,38,.8);
-  color: var(--text);
-  border-radius: 10px;
+.pv-toggle input {
+  accent-color: var(--accent);
+}
+
+.btn.soft,
+.btn.outline {
   padding: 8px 12px;
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 600;
-  transition: all .2s ease;
-}
-#pv-export:hover, #pv-limpar:hover {
-  border-color: var(--brand);
-  background: rgba(102,163,255,.15);
-  transform: translateY(-1px);
 }
 
-/* =========================
-   Painel esquerdo (Chat + Histórico)
-========================= */
+/* Painel esquerdo (conversa + histórico) */
 .pv-panel {
   display: flex;
   flex-direction: column;
+  min-height: 0;
   border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: linear-gradient(180deg, rgba(10,15,25,.8), rgba(6,10,18,.9));
-  box-shadow: 0 10px 30px rgba(0,0,0,.3);
-  overflow: hidden;
+  border-radius: var(--r-sm);
+  background: #10161c;
 }
 
 .pv-log {
   flex: 1;
-  padding: 18px;
+  padding: 16px;
   overflow: auto;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 
 .pv-log .mensagem {
-  background: linear-gradient(180deg, #0f1726, #0d1422);
-  border: 1px solid #22314a;
-  border-radius: 16px;
-  padding: 10px 14px;
-  max-width: 90%;
+  background: #0f151c;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  padding: 10px 12px;
+  max-width: 92%;
   font-size: 14px;
   line-height: 1.5;
-  box-shadow: 0 0 12px rgba(0,0,0,.3);
-  animation: fadeIn .25s ease;
-}
-.pv-log .user {
-  align-self: flex-end;
-  background: linear-gradient(180deg, #11241b, #0f1d19);
-  border-color: #2a5a44;
 }
 
-/* Histórico */
+.pv-log .user {
+  align-self: flex-end;
+  background: #0f1715;
+  border-color: #244a3e;
+}
+
 .pv-history {
   border-top: 1px dashed var(--line-2);
   padding: 10px 12px;
   max-height: 200px;
   overflow: auto;
-  background: rgba(12,18,30,.5);
+  background: #0e141a;
 }
+
 .pv-history-head {
   display: flex;
   align-items: center;
@@ -123,111 +118,94 @@
   font-size: 12px;
   margin-bottom: 6px;
 }
+
 .pv-historico {
   list-style: none;
   margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
+
 .pv-historico li {
-  background: rgba(15,22,38,.8);
-  border: 1px solid var(--line-2);
-  border-radius: 10px;
+  background: #0f141a;
+  border: 1px solid var(--line);
+  border-radius: var(--r-xs);
   padding: 8px 10px;
   cursor: pointer;
-  transition: background .25s ease, transform .08s ease;
+  transition: background .15s ease, transform .03s ease, border-color .15s;
 }
+
 .pv-historico li:hover {
-  background: rgba(102,163,255,.15);
-  transform: translateX(4px);
+  background: #131a22;
+  border-color: var(--line-2);
+  transform: translateX(1px);
 }
+
 .pv-h-item-title {
   font-weight: 700;
   font-size: 13px;
 }
+
 .pv-h-item-date {
   font-size: 11px;
   color: var(--muted);
 }
 
-/* Composer */
+/* Composer previsões */
 .pv-composer {
   border-top: 1px solid var(--line);
-  background: rgba(10,15,22,.7);
+  background: #0e1319;
   display: flex;
   gap: 10px;
   padding: 12px;
 }
+
 .pv-composer input {
   flex: 1;
-  border: 1px solid #263249;
-  background: #0a1220b3;
+  border: 1px solid var(--line);
+  background: #0b0f14;
   color: var(--text);
-  border-radius: 12px;
+  border-radius: var(--r-sm);
   padding: 12px;
   outline: none;
-  transition: border-color .2s ease, box-shadow .2s ease;
-}
-.pv-composer input:focus {
-  border-color: var(--brand);
-  box-shadow: 0 0 0 3px rgba(102,163,255,.15);
-}
-.pv-composer button {
-  background: linear-gradient(90deg, var(--brand), var(--brand-2));
-  color: #fff;
-  border: 0;
-  border-radius: 12px;
-  padding: 10px 18px;
-  font-weight: 700;
-  cursor: pointer;
-  box-shadow: 0 0 10px rgba(102,163,255,.25);
-  transition: transform .06s ease, filter .2s ease;
-}
-.pv-composer button:hover {
-  filter: brightness(1.07);
-  transform: translateY(-1px);
 }
 
-/* =========================
-   Painel direito (Analytics)
-========================= */
+.pv-composer input:focus {
+  border-color: #2b333e;
+  box-shadow: 0 0 0 2px rgba(16, 163, 127, .15);
+}
+
+/* Analytics (cartões) */
 .pv-analytics {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 16px;
   min-height: 0;
 }
 
-/* Card Base */
 .pv-card {
   border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: linear-gradient(180deg, rgba(17,24,39,.65), rgba(8,12,20,.75));
-  box-shadow: var(--shadow-2);
+  border-radius: var(--r-sm);
+  background: #10161c;
   padding: 14px;
   display: flex;
   flex-direction: column;
-  animation: fadeIn .4s ease;
-  transition: transform .15s ease, box-shadow .2s ease;
-}
-.pv-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(102,163,255,.08);
 }
 
-/* Cabeçalho + indicadores */
 .pv-card-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin-bottom: 10px;
 }
+
 .pv-card-title {
   font-weight: 800;
   font-size: 15px;
 }
+
 .pv-legend {
   display: flex;
   align-items: center;
@@ -235,64 +213,65 @@
   color: var(--muted);
   font-size: 12px;
 }
-.dot { width: 10px; height: 10px; border-radius: 50%; }
-.dot-count { background: var(--brand); }
-.dot-ma { background: #a78bfa; }
 
-/* Canvas */
-#pv-canvas {
-  width: 100%;
-  height: 400px;
-  background: linear-gradient(180deg, rgba(11,16,26,.85), rgba(6,10,18,.9));
-  border-radius: 12px;
-  box-shadow: inset 0 0 16px rgba(102,163,255,.1);
-  animation: fadeIn .6s ease;
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
 }
 
-/* Indicador de tendência */
-.pv-trend {
-  margin-left: 8px;
-  font-weight: 700;
-  font-size: 13px;
-  text-shadow: 0 0 6px rgba(102,163,255,.3);
+.dot-count {
+  background: var(--accent);
 }
 
-/* =========================
-   KPIs acima do gráfico
-========================= */
+.dot-ma {
+  background: #a78bfa;
+}
+
+/* KPIs */
 .pv-stats {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 10px;
   margin-bottom: 10px;
 }
+
 .pv-stat {
-  background: rgba(20,30,45,.7);
-  border: 1px solid var(--line-2);
-  border-radius: 10px;
+  background: #0f141a;
+  border: 1px solid var(--line);
+  border-radius: var(--r-xs);
   padding: 10px 12px;
   text-align: center;
-  box-shadow: inset 0 0 8px rgba(102,163,255,.05);
-  transition: background .3s ease;
 }
-.pv-stat:hover {
-  background: rgba(102,163,255,.08);
-}
+
 .pv-stat .label {
   font-size: 12px;
   color: var(--muted);
 }
+
 .pv-stat .value {
   font-weight: 800;
   font-size: 15px;
   margin-top: 4px;
 }
 
-/* Artigos */
+/* Canvas */
+#pv-canvas {
+  display: block;
+  width: 100% !important;
+  height: 360px !important;
+  max-height: 60vh;
+  background: #0e141a;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+}
+
+/* Lista de artigos */
 .pv-articles-card {
-  max-height: 280px;
+  max-height: 300px;
   overflow: auto;
 }
+
 .pv-articles {
   margin-top: 6px;
   font-size: 14px;
@@ -301,57 +280,52 @@
   flex-direction: column;
   gap: 6px;
 }
+
 .pv-articles a {
-  color: #9ec1ff;
+  color: #aee6d6;
   text-decoration: none;
-  transition: color .15s ease;
 }
+
 .pv-articles a:hover {
-  color: #c6d8ff;
+  color: #c4efe4;
   text-decoration: underline;
 }
+
 .pv-articles div:hover {
-  background: rgba(102,163,255,.05);
-  border-radius: 6px;
+  background: #0f141a;
+  border-radius: var(--r-xs);
   padding-left: 4px;
-  transition: background .2s ease;
+  transition: background .15s ease;
 }
 
-/* =========================
-   Efeitos e Responsividade
-========================= */
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: none; }
+/* Trend badge */
+.pv-trend {
+  margin-left: 8px;
+  font-weight: 700;
+  font-size: 13px;
 }
 
+/* Responsivo */
 @media (max-width:1100px) {
-  .previsoes-layout { grid-template-columns: 1fr; }
-  #pv-canvas { height: 320px; }
+  .previsoes-layout {
+    grid-template-columns: 1fr;
+  }
+
+  #pv-canvas {
+    height: 320px !important;
+  }
 }
+
 @media (max-width:640px) {
-  .pv-card-title { font-size: 13px; }
-  .pv-articles { font-size: 13px; }
-  .pv-stats { grid-template-columns: 1fr; }
-}
+  .pv-card-title {
+    font-size: 13px;
+  }
 
-Evita feedback loop de tamanho entre Chart.js e o layout
-.pv-card {
-  contain: layout paint;       /* isola layout/paint do card */
-  overflow: hidden;            /* evita “crescer” por overflow do canvas */
-}
+  .pv-articles {
+    font-size: 13px;
+  }
 
-/* Garante tamanho estável para o canvas */
-#pv-canvas {
-  display: block;
-  width: 100% !important;
-  height: 360px !important;    /* fixe a altura do gráfico */
-  max-height: 60vh;            /* trava em telas menores */
+  .pv-stats {
+    grid-template-columns: 1fr;
+  }
 }
-
-/* Se seu grid estava forçando recalcular altura toda hora, use min-height em vez de height fixa */
-.previsoes-layout {
-  min-height: calc(100vh - 64px);
-  height: auto;
-}
-

@@ -1,19 +1,3 @@
-/* ============================================================================
-   PREVISÕES — MÓDULO ATUALIZADO (robusto, sem loops de resize)
-   Requer:
-     - Chart.js no <head>
-     - HTML com ids: pv-form, pv-tema, pv-log, pv-canvas, pv-articles,
-                     pv-export, pv-limpar, pv-historico, pv-clear-history,
-                     pv-mm e botões .pv-range (7/14/30)
-   Endpoint:
-     - POST /prever -> { previsao, series:[{date,count}], artigos:[...],
-                         trend:{slope,pct,last_delta,confidence}? }
-   Extras:
-     - Cache leve (2 min) por “tema|dias”
-     - Paginação de artigos (ver mais)
-     - Export CSV inclui MM3d quando habilitada
-     - Atalhos: Enter envia, Ctrl/Cmd+Enter envia no campo
-   ========================================================================== */
 (() => {
   // ---------- DOM helpers ----------
   const $ = (sel, root = document) => root.querySelector(sel);

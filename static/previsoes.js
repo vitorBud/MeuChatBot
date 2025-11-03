@@ -1,3 +1,11 @@
+// ============================================================================
+// OrionAI — Módulo de Previsões Inteligentes (Versão Melhorada)
+// - Sistema de análise preditiva mais preciso
+// - Algoritmos de machine learning simples
+// - Previsões quantitativas claras
+// - Análise de tendências avançada
+// ============================================================================
+
 (() => {
   // ---------- DOM helpers ----------
   const $ = (sel, root = document) => root.querySelector(sel);
@@ -28,18 +36,18 @@
     temaAtual: '',
     series: [],
     chart: null,
-    inFlight: null,             // AbortController
-    prefsKey: 'pv_prefs_v2',
-    histKey: 'pv_history_v2',
+    inFlight: null,
+    prefsKey: 'pv_prefs_v3',
+    histKey: 'pv_history_v3',
     history: [],
-    lastTrend: null,            // { slope, pct, lastDelta, line }
-    lastConfidence: null,       // { score, label }
+    lastPrediction: null,
+    forecastDays: 5, // Dias para prever no futuro
     // artigos (paginados)
     allArticles: [],
     pageSize: 8,
     pageIndex: 0,
     // cache leve (memória) por 2 minutos
-    cache: new Map(),           // key -> { at, payload }
+    cache: new Map(),
     cacheTTL: 120000
   };
 
@@ -131,77 +139,145 @@
     return out;
   };
 
-  const linearSlope = (y) => {
+  // ---------- ALGORITMOS DE PREVISÃO MELHORADOS ----------
+  
+  // Regressão linear para tendência
+  const linearRegression = (y) => {
     const n = y.length;
-    if (n < 2) return 0;
-    let sx = 0, sy = 0, sxy = 0, sxx = 0;
-    for (let i = 0; i < n; i++) { sx += i; sy += y[i]; sxy += i * y[i]; sxx += i * i; }
-    const denom = (n * sxx - sx * sx) || 1;
-    return (n * sxy - sx * sy) / denom;
+    if (n < 2) return { slope: 0, intercept: 0 };
+    
+    let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
+    for (let i = 0; i < n; i++) {
+      sumX += i;
+      sumY += y[i];
+      sumXY += i * y[i];
+      sumXX += i * i;
+    }
+    
+    const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
+    const intercept = (sumY - slope * sumX) / n;
+    
+    return { slope, intercept };
   };
 
-  const trendStats = (series) => {
-    const counts = (series || []).map(p => p?.count | 0);
-    const n = counts.length;
-    if (!n) return { slope: 0, pct: 0, lastDelta: 0, line: [] };
-    const slope = linearSlope(counts);
-    const xMean = (n - 1) / 2;
-    const yMean = counts.reduce((a, b) => a + b, 0) / n;
-    const line = counts.map((_, i) => Number((yMean + slope * (i - xMean)).toFixed(3)));
-    const first = counts[0] || 0;
-    const last = counts[n - 1] || 0;
-    const pct = first ? ((last - first) / first) * 100 : 0;
-    const lastDelta = n > 1 ? last - counts[n - 2] : 0;
-    return { slope, pct, lastDelta, line };
+  // Previsão usando regressão linear
+  const forecastLinear = (data, daysAhead = 5) => {
+    const values = data.map(d => d.count);
+    const { slope, intercept } = linearRegression(values);
+    
+    const forecast = [];
+    const lastIndex = data.length - 1;
+    const lastDate = new Date(data[lastIndex].date);
+    
+    for (let i = 1; i <= daysAhead; i++) {
+      const futureValue = Math.max(0, intercept + slope * (lastIndex + i));
+      const futureDate = new Date(lastDate);
+      futureDate.setDate(futureDate.getDate() + i);
+      
+      forecast.push({
+        date: futureDate.toISOString().split('T')[0],
+        count: Math.round(futureValue),
+        isForecast: true
+      });
+    }
+    
+    return forecast;
   };
 
-  const stddev = (arr) => {
-    const n = arr.length; if (n < 2) return 0;
-    const m = arr.reduce((a, b) => a + b, 0) / n;
-    return Math.sqrt(arr.reduce((s, x) => s + (x - m) * (x - m), 0) / (n - 1));
+  // Análise de sazonalidade semanal
+  const detectSeasonality = (data) => {
+    if (data.length < 14) return null; // Precisa de pelo menos 2 semanas
+    
+    const weeklyPattern = [0, 0, 0, 0, 0, 0, 0]; // Domingo a Sábado
+    
+    data.forEach((point, index) => {
+      const date = new Date(point.date);
+      const dayOfWeek = date.getDay(); // 0 = Domingo, 6 = Sábado
+      weeklyPattern[dayOfWeek] += point.count;
+    });
+    
+    // Normalizar
+    const weeks = Math.ceil(data.length / 7);
+    const normalized = weeklyPattern.map(val => val / weeks);
+    
+    // Calcular variação sazonal
+    const avg = normalized.reduce((a, b) => a + b, 0) / 7;
+    const seasonality = normalized.map(val => (val - avg) / avg);
+    
+    return seasonality;
   };
 
-  const confidenceFromSeries = (series, tr) => {
-    const counts = (series || []).map(p => p?.count | 0);
-    const n = counts.length;
-    if (n < 3) return { score: 0.5, label: 'Média' };
-    const s = stddev(counts) || 1e-6;
-    const slopeZ = tr.slope / s;
-    let upDays = 0;
-    for (let i = 1; i < n; i++) { if (counts[i] > counts[i - 1]) upDays++; }
-    const consistency = upDays / (n - 1);
-    const min = Math.min(...counts), max = Math.max(...counts);
-    const avg = counts.reduce((a, b) => a + b, 0) / n || 1;
-    const amp = Math.min(1, Math.max(0, (max - min) / (avg + 1e-6)));
-    const sigmoid = x => 1 / (1 + Math.exp(-x));
-    const slopeScore = sigmoid(slopeZ);
-    const score = Math.max(0, Math.min(1, 0.5 * slopeScore + 0.3 * consistency + 0.2 * amp));
-    const label = score >= 0.66 ? 'Alta' : (score < 0.33 ? 'Baixa' : 'Média');
-    return { score, label };
+  // Previsão com sazonalidade
+  const forecastWithSeasonality = (data, daysAhead = 5) => {
+    const linearForecast = forecastLinear(data, daysAhead);
+    const seasonality = detectSeasonality(data);
+    
+    if (!seasonality) return linearForecast;
+    
+    return linearForecast.map((point, index) => {
+      const date = new Date(point.date);
+      const dayOfWeek = date.getDay();
+      const seasonalAdjustment = seasonality[dayOfWeek] || 0;
+      
+      return {
+        ...point,
+        count: Math.max(0, Math.round(point.count * (1 + seasonalAdjustment)))
+      };
+    });
   };
 
-  const removeTrendBadge = () => {
-    const card = previsoesView?.querySelector('.pv-card');
-    if (!card) return;
-    card.querySelector('.pv-trend')?.remove();
-  };
-  const setTrendBadge = (pct, slope, confidenceLabel) => {
-    const titleEl = previsoesView?.querySelector('.pv-card .pv-card-title');
-    if (!titleEl) return;
-    removeTrendBadge();
-    const up = slope > 0.0001;
-    const down = slope < -0.0001;
-    const badge = document.createElement('span');
-    badge.className = 'pv-trend';
-    badge.style.marginLeft = '8px';
-    badge.style.fontWeight = '700';
-    badge.style.color = up ? '#22c55e' : (down ? '#ef4444' : '#9fb0c8');
-    const arrow = up ? '↑' : (down ? '↓' : '→');
-    badge.textContent = `${arrow} ${pct.toFixed(1)}% · Chances: ${confidenceLabel}`;
-    titleEl.after(badge);
+  // Análise de confiança da previsão
+  const calculateForecastConfidence = (data, forecast) => {
+    if (data.length < 5) return 0.5;
+    
+    // Calcular R² do modelo
+    const values = data.map(d => d.count);
+    const { slope, intercept } = linearRegression(values);
+    
+    const yMean = values.reduce((a, b) => a + b, 0) / values.length;
+    let ssTotal = 0;
+    let ssResidual = 0;
+    
+    values.forEach((y, i) => {
+      ssTotal += Math.pow(y - yMean, 2);
+      const predicted = intercept + slope * i;
+      ssResidual += Math.pow(y - predicted, 2);
+    });
+    
+    const rSquared = 1 - (ssResidual / ssTotal);
+    
+    // Fator de estabilidade (variância dos dados)
+    const variance = values.reduce((acc, val) => acc + Math.pow(val - yMean, 2), 0) / values.length;
+    const stability = Math.max(0, 1 - (variance / (yMean + 1)));
+    
+    // Fator de tendência clara
+    const trendStrength = Math.min(1, Math.abs(slope) * 10);
+    
+    return Math.min(0.95, (rSquared * 0.4 + stability * 0.4 + trendStrength * 0.2));
   };
 
-  // ---------- Chart (com ResizeObserver “amigável”) ----------
+  // Gerar análise textual da previsão
+  const generatePredictionText = (data, forecast, confidence) => {
+    const currentAvg = data.reduce((sum, point) => sum + point.count, 0) / data.length;
+    const forecastAvg = forecast.reduce((sum, point) => sum + point.count, 0) / forecast.length;
+    const changePercent = ((forecastAvg - currentAvg) / currentAvg) * 100;
+    
+    const trend = changePercent > 5 ? 'forte alta' : 
+                 changePercent > 1 ? 'leve alta' :
+                 changePercent < -5 ? 'forte queda' :
+                 changePercent < -1 ? 'leve queda' : 'estabilidade';
+    
+    const confidenceText = confidence > 0.8 ? 'alta confiança' :
+                          confidence > 0.6 ? 'confiança moderada' :
+                          'baixa confiança';
+    
+    const direction = changePercent > 0 ? 'aumentará' : 
+                     changePercent < 0 ? 'diminuirá' : 'permanecerá estável';
+    
+    return `Baseado na análise de ${data.length} dias, prevejo que o interesse em "${state.temaAtual}" ${direction} nos próximos ${state.forecastDays} dias, com uma ${trend} (${Math.abs(changePercent).toFixed(1)}%). Esta previsão tem ${confidenceText} (${Math.round(confidence * 100)}%).`;
+  };
+
+  // ---------- Chart com Previsão ----------
   let renderLock = false;
   let ro = null;
 
@@ -210,22 +286,17 @@
     if (ro) { ro.disconnect(); ro = null; }
   };
 
-  const renderChart = (series) => {
+  const renderChart = (series, forecast = []) => {
     if (!pvCanvas || renderLock) return;
     renderLock = true;
     try {
-      const labels = series.map(p => fmtDateLabel(p.date));
-      const counts = series.map(p => p.count | 0);
+      const allData = [...series, ...forecast];
+      const labels = allData.map(p => fmtDateLabel(p.date));
+      const counts = allData.map(p => p.count | 0);
+      const isForecast = allData.map(p => !!p.isForecast);
+      
+      const historicalCounts = series.map(p => p.count | 0);
       const mx = Math.max(0, ...counts);
-
-      const tr = trendStats(series);
-      const conf = confidenceFromSeries(series, tr);
-      state.lastTrend = tr;
-      state.lastConfidence = conf;
-
-      const up = tr.slope > 0.0001;
-      const down = tr.slope < -0.0001;
-      const mainColor = up ? '#22c55e' : (down ? '#ef4444' : '#66a3ff');
 
       destroyChart();
       const ctx = pvCanvas.getContext('2d');
@@ -234,41 +305,40 @@
         data: {
           labels,
           datasets: [
+            // Dados históricos
             {
-              label: 'Matérias/dia',
-              data: counts,
-              borderColor: mainColor,
-              backgroundColor: (c) => {
-                const { chartArea } = c.chart;
-                if (!chartArea) return mainColor + '33';
-                const g = c.chart.ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
-                g.addColorStop(0, up ? 'rgba(34,197,94,.35)' : (down ? 'rgba(239,68,68,.35)' : 'rgba(102,163,255,.35)'));
-                g.addColorStop(1, 'rgba(0,0,0,0)');
-                return g;
-              },
+              label: 'Dados Históricos',
+              data: counts.map((count, i) => isForecast[i] ? null : count),
+              borderColor: '#007aff',
+              backgroundColor: 'rgba(0, 122, 255, 0.1)',
               fill: 'start',
               tension: 0.3,
-              pointRadius: 3,
-              pointHoverRadius: 4,
+              pointRadius: 4,
+              pointHoverRadius: 6,
               borderWidth: 2
             },
+            // Previsão
+            {
+              label: 'Previsão',
+              data: counts.map((count, i) => isForecast[i] ? count : null),
+              borderColor: '#ff9500',
+              backgroundColor: 'rgba(255, 149, 0, 0.1)',
+              fill: false,
+              tension: 0.3,
+              pointRadius: 4,
+              pointHoverRadius: 6,
+              borderWidth: 2,
+              borderDash: [5, 5]
+            },
+            // Média móvel
             ...(pvMM?.checked ? [{
               label: 'MM 3d',
-              data: movingAverage(counts, 3),
-              borderColor: '#a78bfa',
+              data: movingAverage(historicalCounts, 3).map((val, i) => isForecast[i] ? null : val),
+              borderColor: '#34c759',
               pointRadius: 0,
-              borderWidth: 2,
+              borderWidth: 1.5,
               tension: 0.25
-            }] : []),
-            {
-              label: 'Tendência',
-              data: tr.line,
-              borderColor: up ? '#22c55e' : (down ? '#ef4444' : '#9fb0c8'),
-              borderDash: [6, 4],
-              pointRadius: 0,
-              borderWidth: 2,
-              tension: 0
-            }
+            }] : [])
           ]
         },
         options: {
@@ -277,55 +347,61 @@
           resizeDelay: 200,
           animation: false,
           plugins: {
-            legend: { display: false },
+            legend: { 
+              display: true,
+              position: 'top'
+            },
             tooltip: {
               mode: 'index',
               intersect: false,
               callbacks: {
-                title: (items) => `Dia: ${items[0].label}`,
-                afterBody: () => {
-                  const s = tr.lastDelta > 0 ? '↑' : tr.lastDelta < 0 ? '↓' : '→';
-                  return [
-                    `Variação dia: ${s} ${tr.lastDelta}`,
-                    `Período: ${tr.pct.toFixed(1)}%`,
-                    `Chances: ${conf.label}`
-                  ];
+                title: (items) => {
+                  const item = items[0];
+                  const isPred = isForecast[item.dataIndex];
+                  return `${item.label} ${isPred ? '(Previsão)' : ''}`;
                 }
               }
             }
           },
           scales: {
-            x: { grid: { color: 'rgba(255,255,255,.07)' }, ticks: { autoSkip: true, maxTicksLimit: 8 } },
-            y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,.07)' }, suggestedMax: Math.max(1, mx + 1) }
+            x: { 
+              grid: { color: 'rgba(255,255,255,.07)' }, 
+              ticks: { autoSkip: true, maxTicksLimit: 12 } 
+            },
+            y: { 
+              beginAtZero: true, 
+              grid: { color: 'rgba(255,255,255,.07)' }, 
+              suggestedMax: Math.max(1, mx + 1) 
+            }
           }
         }
       });
 
-      // Resize “amigável”
+      // Resize Observer
       ro = new ResizeObserver(() => { state.chart?.resize(); });
       ro.observe(pvCanvas);
 
-      setTrendBadge(tr.pct, tr.slope, conf.label);
-      updateStatsCards({ pct: tr.pct, lastDelta: tr.lastDelta, confLabel: conf.label });
+      updateStatsCards(historicalCounts, forecast, state.lastPrediction?.confidence || 0);
 
-      if (mx === 0) {
-        pvAdd('Bot: Sem variação detectada no período (cobertura nula/baixa). Tente ampliar o intervalo ou outro tema.', 'bot');
-      }
     } finally {
       renderLock = false;
     }
   };
 
-  const updateStatsCards = (info) => {
+  const updateStatsCards = (historical, forecast, confidence) => {
     if (!pvStatsBox) return;
     pvStatsBox.innerHTML = '';
-    if (!info) return;
-    const { pct, lastDelta, confLabel } = info;
+    
+    const currentAvg = historical.reduce((a, b) => a + b, 0) / historical.length;
+    const forecastAvg = forecast.reduce((a, b) => a + b, 0) / forecast.length;
+    const changePercent = ((forecastAvg - currentAvg) / currentAvg) * 100;
+    
     const blocks = [
-      { label: 'Tendência', value: `${pct > 0 ? 'Alta ↑' : (pct < 0 ? 'Baixa ↓' : 'Estável →')}` },
-      { label: 'Δ Diário', value: (lastDelta > 0 ? '+' : '') + lastDelta },
-      { label: 'Chances', value: confLabel }
+      { label: 'Tendência', value: changePercent > 0 ? 'Alta ↑' : (changePercent < 0 ? 'Baixa ↓' : 'Estável →') },
+      { label: 'Variação', value: `${changePercent > 0 ? '+' : ''}${changePercent.toFixed(1)}%` },
+      { label: 'Confiança', value: `${Math.round(confidence * 100)}%` }
     ];
+    
     blocks.forEach(b => {
       const d = document.createElement('div');
       d.className = 'pv-stat';
@@ -340,28 +416,26 @@
     destroyChart();
     state.series = [];
     state.temaAtual = '';
-    state.lastTrend = null;
-    state.lastConfidence = null;
+    state.lastPrediction = null;
     state.allArticles = [];
     state.pageIndex = 0;
-    updateStatsCards(null);
-    removeTrendBadge();
+    pvStatsBox && (pvStatsBox.innerHTML = '');
   };
 
   // ---------- Export ----------
   pvExport?.addEventListener('click', () => {
     if (!state.series.length) return;
-    const counts = state.series.map(p => p.count | 0);
-    const mm = pvMM?.checked ? movingAverage(counts, 3) : [];
-    const header = pvMM?.checked ? 'date,count,mm3d\n' : 'date,count\n';
-    const rows = state.series.map((p, i) =>
-      pvMM?.checked ? `${p.date},${p.count},${mm[i] ?? ''}` : `${p.date},${p.count}`
-    ).join('\n');
+    
+    const header = 'date,count,type\n';
+    const historicalRows = state.series.map(p => `${p.date},${p.count},historical`).join('\n');
+    const forecastRows = state.lastPrediction?.forecast?.map(p => `${p.date},${p.count},forecast`).join('\n') || '';
+    
+    const rows = forecastRows ? historicalRows + '\n' + forecastRows : historicalRows;
     const blob = new Blob([header + rows], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     const temaSlug = (state.temaAtual || 'series_previsoes').toLowerCase().replace(/[^\w\-]+/g, '-');
-    a.href = url; a.download = `${temaSlug}-${state.PV_DAYS}d.csv`;
+    a.href = url; a.download = `${temaSlug}-previsao-${state.PV_DAYS}d.csv`;
     document.body.appendChild(a); a.click(); a.remove();
     URL.revokeObjectURL(url);
   });
@@ -377,12 +451,14 @@
       });
       state.PV_DAYS = parseInt(btn.dataset.days, 10) || 7;
       savePrefs();
-      if (state.temaAtual) submitTema(state.temaAtual); // reconsulta real
+      if (state.temaAtual) submitTema(state.temaAtual);
     });
   });
   pvMM?.addEventListener('change', () => {
     savePrefs();
-    if (state.series.length) renderChart(state.series);
+    if (state.series.length) {
+      renderChart(state.series, state.lastPrediction?.forecast || []);
+    }
   });
   pvLimpar?.addEventListener('click', clearUI);
 
@@ -444,7 +520,7 @@
               <span style="color:#8aa0bf">${fonte}${dStr ? ' · ' + dStr : ''}</span></div>`;
     }).join('') || '<div style="color:#8aa0bf">Sem artigos encontrados nesse período.</div>';
 
-    // botão “ver mais”
+    // botão "ver mais"
     const moreNeeded = end < state.allArticles.length;
     let btn = pvArticles.parentElement.querySelector('.pv-more');
     if (moreNeeded) {
@@ -466,17 +542,7 @@
     }
   };
 
-  // ---------- Fluxo principal ----------
-  const parseYearRangeFromText = (txt) => {
-    if (!txt) return null;
-    const t = txt.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-    const m = t.match(/(?:entre\s+)?(19\d{2}|20\d{2})\s*(?:a|ate|e|-|—|–|to)\s*(19\d{2}|20\d{2})/);
-    if (!m) return null;
-    let a = parseInt(m[1], 10), b = parseInt(m[2], 10);
-    if (a > b) [a, b] = [b, a];
-    return { anos_de: a, anos_ate: b, fromISO: `${a}-01-01`, toISO: `${b}-12-31` };
-  };
-
+  // ---------- Fluxo principal MELHORADO ----------
   const submitTema = async (temaOpt) => {
     const value = (temaOpt ?? pvTema?.value ?? '').trim();
     if (!value) return;
@@ -487,7 +553,7 @@
     state.inFlight = controller;
 
     pvAdd(`Você: ${value}`, 'user');
-    const thinking = 'Bot: coletando manchetes e montando série...';
+    const thinking = 'Bot: analisando tendências e gerando previsões...';
     pvAdd(thinking, 'bot');
     setArticlesLoading(true);
 
@@ -496,9 +562,7 @@
     if (pvTema) pvTema.value = '';
 
     try {
-      const yr = parseYearRangeFromText(value);
       const body = { tema: value, dias: state.PV_DAYS };
-      if (yr) { body.anos_de = yr.anos_de; body.anos_ate = yr.anos_ate; }
 
       const key = cacheKey(value, state.PV_DAYS);
       let data = getCache(key);
@@ -519,41 +583,41 @@
       state.temaAtual = value;
       addHistory(value);
 
-      // remove “pensando...” se for a última
+      // remove "pensando..." se for a última
       const last = pvLog?.lastElementChild;
       if (last && last.textContent === thinking) last.remove();
 
-      pvAdd(`Bot: ${data.previsao || 'Sem resumo.'}`, 'bot');
-
-      // série
+      // Processar série de dados
       const series = Array.isArray(data.series) ? data.series.slice() : [];
       series.sort((a, b) => String(a.date).localeCompare(String(b.date)));
       state.series = series;
 
-      // trend/confidence do backend (opcional)
-      if (data.trend && typeof data.trend === 'object') {
-        const trLocal = trendStats(series);
-        state.lastTrend = {
-          slope: Number(data.trend.slope ?? trLocal.slope),
-          pct: Number(data.trend.pct ?? trLocal.pct),
-          lastDelta: Number(data.trend.last_delta ?? trLocal.lastDelta),
-          line: trLocal.line
+      // GERAR PREVISÃO
+      if (series.length >= 3) {
+        const forecast = forecastWithSeasonality(series, state.forecastDays);
+        const confidence = calculateForecastConfidence(series, forecast);
+        const predictionText = generatePredictionText(series, forecast, confidence);
+        
+        state.lastPrediction = {
+          forecast,
+          confidence,
+          generatedAt: new Date().toISOString()
         };
-        state.lastConfidence = { label: data.trend.confidence || 'Média', score: 0.5 };
+
+        // Mostrar previsão
+        pvAdd(`Bot: ${predictionText}`, 'bot');
+        
+        // Renderizar gráfico com previsão
+        renderChart(series, forecast);
+      } else {
+        pvAdd('Bot: Dados insuficientes para gerar previsão. Necessário pelo menos 3 dias de dados.', 'bot');
+        renderChart(series);
       }
 
-      // render chart
-      renderChart(state.series);
-
-      // artigos (com paginação)
+      // Artigos
       state.allArticles = Array.isArray(data.artigos) ? data.artigos : [];
       state.pageIndex = 0;
       renderArticles();
-
-      // loga stats
-      const tr = state.lastTrend || trendStats(state.series);
-      const conf = state.lastConfidence || confidenceFromSeries(state.series, tr);
-      pvAdd(`Bot: Tendência no período: ${tr.pct.toFixed(1)}% · Chances: ${conf.label}`, 'bot');
 
     } catch (err) {
       if (err?.name === 'AbortError') {
@@ -573,6 +637,7 @@
     e.preventDefault();
     submitTema();
   });
+  
   // atalhos de teclado no input
   pvTema?.addEventListener('keydown', (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
@@ -589,7 +654,11 @@
 
   // helpers para debug manual no console
   window.__previsoesDebug = {
-    submitTema, renderChart,
+    submitTema, 
+    renderChart,
+    forecastLinear,
+    forecastWithSeasonality,
+    calculateForecastConfidence,
     getState: () => ({ ...state })
   };
 

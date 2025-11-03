@@ -8,7 +8,6 @@
   <!-- Fonte -->
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
 
- 
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='previsoes.css') }}">
 
@@ -25,6 +24,9 @@
         <div class="logo-mark" aria-hidden="true">◎</div>
         <div class="logo-name">Orion<span>AI</span></div>
       </div>
+
+      <!-- THEME TOGGLE: botão de alternância claro/escuro (não interfere em nada) -->
+      <button id="theme-toggle" class="icon-btn" title="Alternar tema" aria-pressed="false">🌙</button>
 
       <!-- Perfil / Config -->
       <div class="profile-wrap">
@@ -48,7 +50,6 @@
             <div class="menu-sep"></div>
 
             <div class="menu-section">Labs</div>
-            <!-- Acesso “oculto” ao módulo de Previsões (aqui é o método) -->
             <button class="menu-item" type="button" onclick="document.querySelector('.nav-item[data-view=&quot;previsoes-view&quot;]').click()">Abrir Previsões</button>
           </div>
         </details>
@@ -104,7 +105,6 @@
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m1 0v13a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V7h10Z"/></svg>
         </button>
 
-        <!-- Config rápidas -->
         <details class="dropdown">
           <summary class="icon-btn" aria-label="Mais opções" title="Mais opções">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4Zm0 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4Zm0 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"/></svg>
@@ -208,5 +208,30 @@
   <!-- Seus scripts originais (inalterados) -->
   <script src="{{ url_for('static', filename='script.js') }}"></script>
   <script src="{{ url_for('static', filename='previsoes.js') }}"></script>
+
+  <!-- THEME TOGGLE: JS que usa [data-theme="dark"] -->
+  <script>
+    (function () {
+      const btn = document.getElementById('theme-toggle');
+      const root = document.documentElement; // <html>
+
+      const stored = localStorage.getItem('theme');
+      const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      const initial = stored || (prefersDark ? 'dark' : 'light');
+
+      root.setAttribute('data-theme', initial);
+      btn.textContent = initial === 'dark' ? '☀️' : '🌙';
+      btn.setAttribute('aria-pressed', initial === 'dark');
+
+      btn.addEventListener('click', () => {
+        const current = root.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+        const next = current === 'dark' ? 'light' : 'dark';
+        root.setAttribute('data-theme', next);
+        localStorage.setItem('theme', next);
+        btn.textContent = next === 'dark' ? '☀️' : '🌙';
+        btn.setAttribute('aria-pressed', next === 'dark');
+      });
+    })();
+  </script>
 </body>
 </html>

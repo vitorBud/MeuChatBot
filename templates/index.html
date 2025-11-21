@@ -10,82 +10,19 @@
 
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='previsoes.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='sidebar.css') }}">
 
   <!-- Chart.js necessário para previsões -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
+
 <body>
-  <!-- Sidebar (ajustável) -->
-  <aside id="sidebar" aria-label="Histórico de conversas">
-    <header class="sb-header">
-      <button class="sb-collapse" title="Colapsar/expandir sidebar" aria-label="Colapsar sidebar">❮</button>
 
-      <div class="logo">
-        <div class="logo-mark" aria-hidden="true">◎</div>
-        <div class="logo-name">Orion<span>AI</span></div>
-      </div>
-
-      <!-- THEME TOGGLE: botão de alternância claro/escuro (não interfere em nada) -->
-      <button id="theme-toggle" class="icon-btn" title="Alternar tema" aria-pressed="false">🌙</button>
-
-      <!-- Perfil / Config -->
-      <div class="profile-wrap">
-        <details class="dropdown">
-          <summary class="icon-btn ghost" aria-label="Abrir menu de perfil" title="Perfil & Configurações">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10Zm0 2c-5 0-9 2.5-9 5v1h18v-1c0-2.5-4-5-9-5Z"/></svg>
-          </summary>
-          <div class="menu">
-            <div class="menu-section">Conta</div>
-            <button class="menu-item" type="button">Meu perfil</button>
-            <button class="menu-item" type="button" onclick="openPreferences()">Preferências</button>
-
-            <div class="menu-sep"></div>
-
-            <div class="menu-section">Chats</div>
-            <button id="novo-chat" class="menu-item" type="button">+ Novo chat</button>
-            <button id="renomear-chat" class="menu-item" type="button">Renomear chat</button>
-            <button id="apagar-chat" class="menu-item danger" type="button">Apagar chat</button>
-            <button id="limpar-chat" class="menu-item" type="button">Limpar mensagens</button>
-
-            <div class="menu-sep"></div>
-
-            <div class="menu-section">Labs</div>
-            <button class="menu-item" type="button" onclick="document.querySelector('.nav-item[data-view=&quot;previsoes-view&quot;]').click()">Abrir Previsões</button>
-          </div>
-        </details>
-      </div>
-    </header>
-
-    <!-- Busca + lista de threads -->
-    <div class="sb-search">
-      <input id="thread-search" type="search" placeholder="Buscar chats..." />
-    </div>
-
-    <nav class="threads">
-      <div class="threads-head">
-        <div class="threads-title">Seus chats</div>
-        <span id="thread-count">0 chats</span>
-      </div>
-      <ul id="thread-list"></ul>
-    </nav>
-
-    <footer class="sb-footer">
-      <div class="model-pill" title="Modelo em uso">Gemini · Python</div>
-      <!-- Botões de navegação principais (apenas CHAT visível) -->
-      <div class="nav-main">
-        <button class="nav-item active" data-view="chat-view" title="Conversa">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v12H7l-3 3V4z"/></svg>
-          <span>Conversa</span>
-        </button>
-
-        <!-- Previsões fica oculto visualmente — ainda é .nav-item para o JS -->
-        <button class="nav-item nav-hidden" data-view="previsoes-view" title="Previsões (Labs)">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 13h4l3 7 4-14 3 7h4"/></svg>
-          <span>Previsões</span>
-        </button>
-      </div>
-    </footer>
-  </aside>
+  <!-- ================================================ -->
+  <!--             SIDEBAR INCLUÍDA AQUI                -->
+  <!-- ================================================ -->
+  {% include "sidebar.html" %}
+  <!-- ================================================ -->
 
   <!-- App -->
   <main class="app">
@@ -101,6 +38,7 @@
         <button id="exportar-chat" class="icon-btn" title="Exportar chat">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 21h16"/></svg>
         </button>
+
         <button id="limpar-chat-2" class="icon-btn" title="Limpar mensagens">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m1 0v13a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V7h10Z"/></svg>
         </button>
@@ -109,6 +47,7 @@
           <summary class="icon-btn" aria-label="Mais opções" title="Mais opções">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4Zm0 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4Zm0 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"/></svg>
           </summary>
+
           <div class="menu">
             <button class="menu-item" type="button" onclick="document.getElementById('novo-chat').click()">Novo chat</button>
             <button class="menu-item" type="button" onclick="document.getElementById('renomear-chat').click()">Renomear</button>
@@ -135,13 +74,14 @@
           <button class="icon-btn" type="button" title="Voz">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v5a3 3 0 0 0 3 3zm6-3a6 6 0 0 1-12 0M12 21v-3"/></svg>
           </button>
+
           <button id="enviar" class="send" type="submit" title="Enviar">Enviar</button>
         </div>
         <p class="hint">↵ Enviar • Shift+↵ quebra linha</p>
       </form>
     </section>
 
-    <!-- View: Previsões (Labs) -->
+    <!-- View: Previsões -->
     <section id="previsoes-view" class="view">
       <header class="pv-top">
         <h1 class="pv-title">Previsões (experimental)</h1>
@@ -163,7 +103,6 @@
       </header>
 
       <div class="previsoes-layout">
-        <!-- Painel da conversa + histórico -->
         <div class="pv-panel">
           <div id="pv-log" class="pv-log"></div>
 
@@ -181,49 +120,45 @@
           </form>
         </div>
 
-        <!-- Painel do gráfico + artigos -->
-       
-      <div class="pv-analytics">
-        <div class="pv-card">
-          <div class="pv-card-head">
-            <div class="pv-card-title">
-              Volume de notícias por dia
-              <span id="pv-trend" class="pv-trend"></span>
+        <div class="pv-analytics">
+          <div class="pv-card">
+            <div class="pv-card-head">
+              <div class="pv-card-title">
+                Volume de notícias por dia
+                <span id="pv-trend" class="pv-trend"></span>
+              </div>
+              <div class="pv-legend">
+                <span class="dot dot-count"></span> Matérias/dia
+                <span class="dot dot-ma"></span> MM 3d
+              </div>
             </div>
-            <div class="pv-legend">
-              <span class="dot dot-count"></span> Matérias/dia
-              <span class="dot dot-ma"></span> MM 3d
-            </div>
+
+            <div class="pv-stats"></div>
+            <canvas id="pv-canvas"></canvas>
           </div>
 
-          <div class="pv-stats"></div>
-          <canvas id="pv-canvas"></canvas>
+          <div class="pv-card pv-articles-card">
+            <div class="pv-card-title">Artigos recentes</div>
+            <div id="pv-articles" class="pv-articles"></div>
+          </div>
         </div>
-
-        <div class="pv-card pv-articles-card">
-          <div class="pv-card-title">Artigos recentes</div>
-          <div id="pv-articles" class="pv-articles"></div>
-        </div>
-      </div>
-
-
       </div>
     </section>
   </main>
 
-  <!-- Seus scripts originais (inalterados) -->
   <script src="{{ url_for('static', filename='script.js') }}"></script>
   <script src="{{ url_for('static', filename='previsoes.js') }}"></script>
   <script src="{{ url_for('static', filename='preferencias.js') }}"></script>
+  <script src="{{ url_for('static', filename='sidebar.js') }}"></script>
 
-  <!-- THEME TOGGLE: JS que usa [data-theme="dark"] -->
+  <!-- Tema -->
   <script>
     (function () {
       const btn = document.getElementById('theme-toggle');
-      const root = document.documentElement; // <html>
+      const root = document.documentElement;
 
       const stored = localStorage.getItem('theme');
-      const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
       const initial = stored || (prefersDark ? 'dark' : 'light');
 
       root.setAttribute('data-theme', initial);
@@ -231,7 +166,7 @@
       btn.setAttribute('aria-pressed', initial === 'dark');
 
       btn.addEventListener('click', () => {
-        const current = root.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+        const current = root.getAttribute('data-theme');
         const next = current === 'dark' ? 'light' : 'dark';
         root.setAttribute('data-theme', next);
         localStorage.setItem('theme', next);
@@ -240,5 +175,6 @@
       });
     })();
   </script>
+
 </body>
 </html>

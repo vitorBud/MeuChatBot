@@ -1,9 +1,9 @@
 // ============================================================================
-// OrionAI — Módulo de Previsões Inteligentes (Versão Melhorada)
-// - Sistema de análise preditiva mais preciso
-// - Algoritmos de machine learning simples
-// - Previsões quantitativas claras
-// - Análise de tendências avançada
+// OrionAI — Módulo de Previsões Inteligentes (Versão Corrigida)
+// - Usa previsões REAIS do backend (análise de conteúdo)
+// - Remove "interesse em notícias" 
+// - Corrige cálculos quebrados (NaN%)
+// - Stats inteligentes com confiança real
 // ============================================================================
 
 (() => {
@@ -24,6 +24,7 @@
   const pvRangeBtns = $$('.pv-range');
   const pvStatsBox = $('.pv-stats');
   const previsoesView = $('#previsoes-view');
+  const pvTrend = $('#pv-trend');
 
   if (!pvForm || !pvCanvas) {
     console.warn('[previsoes] DOM incompleto; abortando módulo.');
@@ -139,7 +140,7 @@
     return out;
   };
 
-  // ---------- ALGORITMOS DE PREVISÃO MELHORADOS ----------
+  // ---------- ALGORITMOS DE PREVISÃO (APENAS FALLBACK) ----------
   
   // Regressão linear para tendência
   const linearRegression = (y) => {
@@ -256,11 +257,11 @@
     return Math.min(0.95, (rSquared * 0.4 + stability * 0.4 + trendStrength * 0.2));
   };
 
-  // Gerar análise textual da previsão
+  // Gerar análise textual da previsão (FALLBACK)
   const generatePredictionText = (data, forecast, confidence) => {
     const currentAvg = data.reduce((sum, point) => sum + point.count, 0) / data.length;
     const forecastAvg = forecast.reduce((sum, point) => sum + point.count, 0) / forecast.length;
-    const changePercent = ((forecastAvg - currentAvg) / currentAvg) * 100;
+    const changePercent = currentAvg > 0 ? ((forecastAvg - currentAvg) / currentAvg) * 100 : 0;
     
     const trend = changePercent > 5 ? 'forte alta' : 
                  changePercent > 1 ? 'leve alta' :
@@ -274,8 +275,57 @@
     const direction = changePercent > 0 ? 'aumentará' : 
                      changePercent < 0 ? 'diminuirá' : 'permanecerá estável';
     
-    return `Baseado na análise de ${data.length} dias, prevejo que o interesse em "${state.temaAtual}" ${direction} nos próximos ${state.forecastDays} dias, com uma ${trend} (${Math.abs(changePercent).toFixed(1)}%). Esta previsão tem ${confidenceText} (${Math.round(confidence * 100)}%).`;
+    // CORRIGIDO: Remove "interesse em" e NaN%
+    const percentText = isNaN(changePercent) ? '' : ` (${Math.abs(changePercent).toFixed(1)}%)`;
+    
+    return `Baseado no volume de notícias, prevejo que a cobertura sobre "${state.temaAtual}" ${direction} nos próximos ${state.forecastDays} dias, com uma ${trend}${percentText}. Esta previsão tem ${confidenceText}.`;
   };
+
+
+// ---------- Série sintética baseada na tendência/ânimo do cenário ----------
+// ---------- Série sintética baseada na tendência/ânimo do cenário ----------
+const buildForecastSeriesFromTrend = (trendValue, days) => {
+  // trendValue: número em torno de -40 .. +40 (negativo = piora, positivo = melhora)
+  const today = new Date();
+
+  // Nível base (ponto neutro)
+  const baseLevel = 50;
+
+  // Alvo final: base + trendValue (limitado entre 0 e 100)
+  let endLevel = baseLevel + trendValue;
+  endLevel = Math.min(100, Math.max(0, endLevel));
+
+  // Ponto de hoje (histórico)
+  const historical = [{
+    date: today.toISOString().split('T')[0],
+    count: baseLevel
+    // sem isForecast -> tratado como histórico (bolinha azul)
+  }];
+
+  // Pontos futuros (previsão)
+  const forecast = [];
+  const totalSteps = Math.max(1, days); // qtde de dias à frente
+
+  for (let i = 1; i <= totalSteps; i++) {
+    const d = new Date(today);
+    d.setDate(d.getDate() + i);
+
+    // Curva suave (ease-out), fica mais “institucional” que uma reta seca
+    const t = totalSteps === 1 ? 1 : i / totalSteps; // 0..1
+    const eased = t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+
+    const value = baseLevel + (endLevel - baseLevel) * eased;
+
+    forecast.push({
+      date: d.toISOString().split('T')[0],
+      count: Math.round(value),
+      isForecast: true // linha laranja
+    });
+  }
+
+  return { historical, forecast };
+};
+
 
   // ---------- Chart com Previsão ----------
   let renderLock = false;
@@ -286,128 +336,206 @@
     if (ro) { ro.disconnect(); ro = null; }
   };
 
-  const renderChart = (series, forecast = []) => {
-    if (!pvCanvas || renderLock) return;
-    renderLock = true;
-    try {
-      const allData = [...series, ...forecast];
-      const labels = allData.map(p => fmtDateLabel(p.date));
-      const counts = allData.map(p => p.count | 0);
-      const isForecast = allData.map(p => !!p.isForecast);
-      
-      const historicalCounts = series.map(p => p.count | 0);
-      const mx = Math.max(0, ...counts);
+    const renderChart = (series, forecast = []) => {
+  if (!pvCanvas || renderLock) return;
+  renderLock = true;
+  try {
+    const allData = [...series, ...forecast];
 
-      destroyChart();
-      const ctx = pvCanvas.getContext('2d');
-      state.chart = new Chart(ctx, {
-        type: 'line',
-        data: {
-          labels,
-          datasets: [
-            // Dados históricos
-            {
-              label: 'Dados Históricos',
-              data: counts.map((count, i) => isForecast[i] ? null : count),
-              borderColor: '#007aff',
-              backgroundColor: 'rgba(0, 122, 255, 0.1)',
-              fill: 'start',
-              tension: 0.3,
-              pointRadius: 4,
-              pointHoverRadius: 6,
-              borderWidth: 2
-            },
-            // Previsão
-            {
-              label: 'Previsão',
-              data: counts.map((count, i) => isForecast[i] ? count : null),
-              borderColor: '#ff9500',
-              backgroundColor: 'rgba(255, 149, 0, 0.1)',
-              fill: false,
-              tension: 0.3,
-              pointRadius: 4,
-              pointHoverRadius: 6,
-              borderWidth: 2,
-              borderDash: [5, 5]
-            },
-            // Média móvel
-            ...(pvMM?.checked ? [{
-              label: 'MM 3d',
-              data: movingAverage(historicalCounts, 3).map((val, i) => isForecast[i] ? null : val),
-              borderColor: '#34c759',
-              pointRadius: 0,
-              borderWidth: 1.5,
-              tension: 0.25
-            }] : [])
-          ]
+    // Rótulos institucionais: Hoje, D+1, D+2...
+    const labels = allData.map((_, idx) => {
+      if (idx === 0) return 'Hoje';
+      return `D+${idx}`;
+    });
+
+    const counts = allData.map(p => p.count | 0);
+    const isForecast = allData.map(p => !!p.isForecast || !!p.is_prediction);
+
+    const historicalCounts = series.map(p => p.count | 0);
+
+    destroyChart();
+    const ctx = pvCanvas.getContext('2d');
+    state.chart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [
+          // Dados históricos
+          {
+            label: 'Dados Históricos',
+            data: counts.map((count, i) => isForecast[i] ? null : count),
+            borderColor: '#007aff',
+            backgroundColor: 'rgba(0, 122, 255, 0.1)',
+            fill: 'start',
+            tension: 0.4,
+            pointRadius: 4,
+            pointHoverRadius: 6,
+            borderWidth: 3
+          },
+          // Previsão
+          {
+            label: 'Previsão',
+            data: counts.map((count, i) => isForecast[i] ? count : null),
+            borderColor: '#ff9500',
+            backgroundColor: 'rgba(255, 149, 0, 0.1)',
+            fill: false,
+            tension: 0.4,
+            pointRadius: 5,
+            pointHoverRadius: 7,
+            borderWidth: 3,
+            borderDash: [5, 5]
+          },
+          // Média móvel (só em cima do histórico)
+          ...(pvMM?.checked ? [{
+            label: 'MM 3d',
+            data: movingAverage(historicalCounts, 3).map((val, i) => isForecast[i] ? null : val),
+            borderColor: '#34c759',
+            pointRadius: 0,
+            borderWidth: 2,
+            tension: 0.3
+          }] : [])
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        resizeDelay: 200,
+        animation: {
+          duration: 1000
         },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          resizeDelay: 200,
-          animation: false,
-          plugins: {
-            legend: { 
-              display: true,
-              position: 'top'
-            },
-            tooltip: {
-              mode: 'index',
-              intersect: false,
-              callbacks: {
-                title: (items) => {
-                  const item = items[0];
-                  const isPred = isForecast[item.dataIndex];
-                  return `${item.label} ${isPred ? '(Previsão)' : ''}`;
-                }
-              }
+        plugins: {
+          legend: {
+            display: true,
+            position: 'top',
+            labels: {
+              usePointStyle: true,
             }
           },
-          scales: {
-            x: { 
-              grid: { color: 'rgba(255,255,255,.07)' }, 
-              ticks: { autoSkip: true, maxTicksLimit: 12 } 
-            },
-            y: { 
-              beginAtZero: true, 
-              grid: { color: 'rgba(255,255,255,.07)' }, 
-              suggestedMax: Math.max(1, mx + 1) 
+          tooltip: {
+            mode: 'index',
+            intersect: false,
+            callbacks: {
+              title: (items) => {
+                const item = items[0];
+                const isPred = isForecast[item.dataIndex];
+                return `${item.label} ${isPred ? '(Previsão)' : ''}`;
+              }
             }
           }
+        },
+        scales: {
+          x: {
+            grid: { color: 'rgba(255,255,255,.07)' },
+            ticks: {
+              autoSkip: true,
+              maxTicksLimit: 10,
+              maxRotation: 0
+            }
+          },
+          y: {
+            min: 0,
+            max: 100,
+            beginAtZero: true,
+            grid: { color: 'rgba(255,255,255,.07)' },
+            ticks: {
+              stepSize: 25,   // 0, 25, 50, 75, 100
+              precision: 0
+            }
+          }
+        },
+        elements: {
+          line: {
+            tension: 0.4
+          }
         }
-      });
+      }
+    });
 
-      // Resize Observer
-      ro = new ResizeObserver(() => { state.chart?.resize(); });
-      ro.observe(pvCanvas);
+    ro = new ResizeObserver(() => { state.chart?.resize(); });
+    ro.observe(pvCanvas);
 
-      updateStatsCards(historicalCounts, forecast, state.lastPrediction?.confidence || 0);
+  } finally {
+    renderLock = false;
+  }
+};
 
-    } finally {
-      renderLock = false;
-    }
-  };
+      const updateTrendBadge = (trend) => {
+        if (!pvTrend || !trend) return;
 
-  const updateStatsCards = (historical, forecast, confidence) => {
+        const pct = Number(trend.pct ?? 0);
+        let direction = 'flat';
+        let arrow = '→';
+        let label = 'Estável';
+
+        if (pct > 2) {
+          direction = 'up';
+          arrow = '↑';
+          label = 'Em alta';
+        } else if (pct < -2) {
+          direction = 'down';
+          arrow = '↓';
+          label = 'Em baixa';
+        }
+
+        const pctStr = isNaN(pct) ? '' : ` (${pct.toFixed(1)}%)`;
+
+        pvTrend.textContent = `${arrow} ${label}${pctStr}`;
+        pvTrend.dataset.direction = direction;
+      };
+
+
+  // ---------- Stats Inteligentes com Backend ----------
+    
+  const updateStatsWithBackendData = (data) => {
     if (!pvStatsBox) return;
     pvStatsBox.innerHTML = '';
     
-    const currentAvg = historical.reduce((a, b) => a + b, 0) / historical.length;
-    const forecastAvg = forecast.reduce((a, b) => a + b, 0) / forecast.length;
-    const changePercent = ((forecastAvg - currentAvg) / currentAvg) * 100;
+    const contentAnalysis = data.content_analysis || {};
+    const confidence = contentAnalysis.confianca || 0;
+    const sentiment = contentAnalysis.sentimento_medio || 0;
+    const temas = contentAnalysis.temas_detectados || [];
     
     const blocks = [
-      { label: 'Tendência', value: changePercent > 0 ? 'Alta ↑' : (changePercent < 0 ? 'Baixa ↓' : 'Estável →') },
-      { label: 'Variação', value: `${changePercent > 0 ? '+' : ''}${changePercent.toFixed(1)}%` },
-      { label: 'Confiança', value: `${Math.round(confidence * 100)}%` }
+      { 
+        label: 'Confiança', 
+        value: `${Math.round(confidence * 100)}%`,
+        icon: confidence > 0.7 ? '🟢' : confidence > 0.4 ? '🟡' : '🔴'
+      },
+      { 
+        label: 'Sentimento', 
+        value: sentiment > 0.1 ? 'Positivo' : sentiment < -0.1 ? 'Negativo' : 'Neutro',
+        icon: sentiment > 0.1 ? '😊' : sentiment < -0.1 ? '😟' : '😐'
+      },
+      { 
+        label: 'Notícias', 
+        value: contentAnalysis.total_noticias_analisadas || 0,
+        icon: '📰'
+      }
     ];
     
     blocks.forEach(b => {
       const d = document.createElement('div');
       d.className = 'pv-stat';
-      d.innerHTML = `<div class="label">${b.label}</div><div class="value">${b.value}</div>`;
+      d.innerHTML = `
+        <div class="label">${b.icon} ${b.label}</div>
+        <div class="value">${b.value}</div>
+      `;
       pvStatsBox.appendChild(d);
     });
+
+    // 🔥 AQUI: atualiza a setinha usando o trend vindo do backend
+    updateTrendBadge(data.trend);
+
+    // Mostrar temas detectados se houver
+    if (temas.length > 0) {
+      const temasDiv = document.createElement('div');
+      temasDiv.className = 'pv-temas';
+      temasDiv.innerHTML = `
+        <div class="label">🎯 Temas Detectados</div>
+        <div class="temas-list">${temas.slice(0, 3).map(t => t[0]).join(', ')}</div>
+      `;
+      pvStatsBox.appendChild(temasDiv);
+    }
   };
 
   const clearUI = () => {
@@ -542,7 +670,7 @@
     }
   };
 
-  // ---------- Fluxo principal MELHORADO ----------
+  // ---------- Fluxo principal CORRIGIDO ----------
   const submitTema = async (temaOpt) => {
     const value = (temaOpt ?? pvTema?.value ?? '').trim();
     if (!value) return;
@@ -553,7 +681,7 @@
     state.inFlight = controller;
 
     pvAdd(`Você: ${value}`, 'user');
-    const thinking = 'Bot: analisando tendências e gerando previsões...';
+    const thinking = 'Bot: analisando notícias e gerando previsões...';
     pvAdd(thinking, 'bot');
     setArticlesLoading(true);
 
@@ -587,37 +715,88 @@
       const last = pvLog?.lastElementChild;
       if (last && last.textContent === thinking) last.remove();
 
-      // Processar série de dados
-      const series = Array.isArray(data.series) ? data.series.slice() : [];
-      series.sort((a, b) => String(a.date).localeCompare(String(b.date)));
-      state.series = series;
 
-      // GERAR PREVISÃO
-      if (series.length >= 3) {
-        const forecast = forecastWithSeasonality(series, state.forecastDays);
-        const confidence = calculateForecastConfidence(series, forecast);
-        const predictionText = generatePredictionText(series, forecast, confidence);
-        
+            // ---------- DEFINIR O QUÃO FORTE SOBE/DESCE A PARTIR DO SENTIMENTO ----------
+      const contentAnalysis = data.content_analysis || {};
+      const sentimentScore = Number(contentAnalysis.sentimento_medio ?? 0);
+
+      // Mapeamento simples:
+      // muito positivo -> +40 (sobe bastante)
+      // levemente positivo -> +20
+      // neutro -> 0
+      // levemente negativo -> -20
+      // muito negativo -> -40
+      let trendValue = 0;
+      if (sentimentScore >= 0.25) {
+        trendValue = 40;
+      } else if (sentimentScore >= 0.10) {
+        trendValue = 20;
+      } else if (sentimentScore <= -0.25) {
+        trendValue = -40;
+      } else if (sentimentScore <= -0.10) {
+        trendValue = -20;
+      } else {
+        trendValue = 0;
+      }
+
+      // Série sintética para o gráfico (hoje + próximos dias)
+      const { historical, forecast } = buildForecastSeriesFromTrend(trendValue, state.PV_DAYS);
+
+      // histórico = ponto de hoje; previsão = próximos dias
+      state.series = historical;
+      const trendObj = { pct: trendValue }; // usamos só pra setinha
+
+      // 🔥 PRINCIPAL: usar a previsão de TEXTO do backend + gráfico sintético
+      if (contentAnalysis && contentAnalysis.previsao_texto) {
+        const previsaoBackend = contentAnalysis.previsao_texto;
+        const confiancaBackend = contentAnalysis.confianca || 0;
+
         state.lastPrediction = {
           forecast,
-          confidence,
-          generatedAt: new Date().toISOString()
+          confidence: confiancaBackend,
+          generatedAt: new Date().toISOString(),
+          contentAnalysis
         };
 
-        // Mostrar previsão
-        pvAdd(`Bot: ${predictionText}`, 'bot');
-        
-        // Renderizar gráfico com previsão
-        renderChart(series, forecast);
+        // Mostrar a previsão textual
+        pvAdd(`Bot: ${previsaoBackend}`, 'bot');
+
+        // Gráfico: ponto azul (hoje) + linha laranja (futuro)
+        renderChart(historical, forecast);
       } else {
-        pvAdd('Bot: Dados insuficientes para gerar previsão. Necessário pelo menos 3 dias de dados.', 'bot');
-        renderChart(series);
+        // Fallback: se não vier content_analysis, ainda assim desenha algo simples
+        if (forecast.length) {
+          const confidence = 0.5; // neutro
+          const predictionText = generatePredictionText(
+            historical.map(p => ({ date: p.date, count: p.count })),
+            forecast,
+            confidence
+          );
+
+          state.lastPrediction = {
+            forecast,
+            confidence,
+            generatedAt: new Date().toISOString()
+          };
+
+          pvAdd(`Bot: ${predictionText}`, 'bot');
+          renderChart(historical, forecast);
+        } else {
+          pvAdd('Bot: Dados insuficientes para gerar previsão.', 'bot');
+          renderChart([], []);
+        }
       }
+
+      // Atualiza stats e setinha depois que o gráfico já foi montado
+      updateStatsWithBackendData(data);
+      updateTrendBadge(trendObj);
 
       // Artigos
       state.allArticles = Array.isArray(data.artigos) ? data.artigos : [];
       state.pageIndex = 0;
       renderArticles();
+
+
 
     } catch (err) {
       if (err?.name === 'AbortError') {

@@ -37,7 +37,7 @@
           <div class="menu">
             <div class="menu-section">Conta</div>
             <button class="menu-item" type="button">Meu perfil</button>
-            <button class="menu-item" type="button">Preferências</button>
+            <button class="menu-item" type="button" onclick="openPreferences()">Preferências</button>
 
             <div class="menu-sep"></div>
 
@@ -182,25 +182,31 @@
         </div>
 
         <!-- Painel do gráfico + artigos -->
-        <div class="pv-analytics">
-          <div class="pv-card">
-            <div class="pv-card-head">
-              <div class="pv-card-title">Volume de notícias por dia</div>
-              <div class="pv-legend">
-                <span class="dot dot-count"></span> Matérias/dia
-                <span class="dot dot-ma"></span> MM 3d
-              </div>
+       
+      <div class="pv-analytics">
+        <div class="pv-card">
+          <div class="pv-card-head">
+            <div class="pv-card-title">
+              Volume de notícias por dia
+              <span id="pv-trend" class="pv-trend"></span>
             </div>
-
-            <div class="pv-stats"></div>
-            <canvas id="pv-canvas"></canvas>
+            <div class="pv-legend">
+              <span class="dot dot-count"></span> Matérias/dia
+              <span class="dot dot-ma"></span> MM 3d
+            </div>
           </div>
 
-          <div class="pv-card pv-articles-card">
-            <div class="pv-card-title">Artigos recentes</div>
-            <div id="pv-articles" class="pv-articles"></div>
-          </div>
+          <div class="pv-stats"></div>
+          <canvas id="pv-canvas"></canvas>
         </div>
+
+        <div class="pv-card pv-articles-card">
+          <div class="pv-card-title">Artigos recentes</div>
+          <div id="pv-articles" class="pv-articles"></div>
+        </div>
+      </div>
+
+
       </div>
     </section>
   </main>
@@ -208,6 +214,7 @@
   <!-- Seus scripts originais (inalterados) -->
   <script src="{{ url_for('static', filename='script.js') }}"></script>
   <script src="{{ url_for('static', filename='previsoes.js') }}"></script>
+  <script src="{{ url_for('static', filename='preferencias.js') }}"></script>
 
   <!-- THEME TOGGLE: JS que usa [data-theme="dark"] -->
   <script>

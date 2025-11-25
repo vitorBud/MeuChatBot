@@ -3,6 +3,13 @@ class LiquidGlassSidebar {
     constructor() {
         this.sidebar = document.getElementById('sidebar');
         this.toggleBtn = document.querySelector('.sb-toggle');
+        
+        // Verificar se elementos existem
+        if (!this.sidebar || !this.toggleBtn) {
+            console.error('❌ Elementos da sidebar não encontrados');
+            return;
+        }
+        
         this.isRecolhida = localStorage.getItem('sidebarRecolhida') === 'true';
         
         this.init();
@@ -17,6 +24,7 @@ class LiquidGlassSidebar {
     }
 
     setupEventListeners() {
+        // Toggle sidebar
         this.toggleBtn.addEventListener('click', () => this.toggleSidebar());
         
         // Teclas de atalho
@@ -27,16 +35,27 @@ class LiquidGlassSidebar {
             }
         });
 
+        // Fechar sidebar ao clicar fora (mobile)
+        this.setupClickOutside();
+
         // Efeitos de hover nos botões de vidro
         this.setupGlassButtonEffects();
+    }
+
+    setupClickOutside() {
+        document.addEventListener('click', (e) => {
+            if (window.innerWidth <= 768 && 
+                !this.sidebar.contains(e.target) && 
+                !this.toggleBtn.contains(e.target) &&
+                !this.sidebar.classList.contains('recolhida')) {
+                this.toggleSidebar();
+            }
+        });
     }
 
     setupLiquidEffects() {
         // Efeito de onda nos botões
         this.setupRippleEffects();
-        
-        // Efeito de brilho interativo
-        this.setupInteractiveGlow();
     }
 
     setupGlassButtonEffects() {
@@ -54,6 +73,8 @@ class LiquidGlassSidebar {
     }
 
     animateButtonHover(button) {
+        if (this.isRecolhida) return;
+        
         button.style.transform = 'translateY(-2px) scale(1.02)';
         button.style.boxShadow = 
             '0 8px 25px rgba(0, 0, 0, 0.15), ' +
@@ -76,6 +97,9 @@ class LiquidGlassSidebar {
     }
 
     createRipple(event, element) {
+        // Não criar ripple se sidebar recolhida
+        if (this.isRecolhida) return;
+        
         const ripple = document.createElement('span');
         const rect = element.getBoundingClientRect();
         
@@ -86,7 +110,7 @@ class LiquidGlassSidebar {
         ripple.style.cssText = `
             position: absolute;
             border-radius: 50%;
-            background: rgba(255, 255, 255, 0.3);
+            background: rgba(255, 255, 255, 0.4);
             transform: scale(0);
             animation: ripple 0.6s linear;
             pointer-events: none;
@@ -94,6 +118,7 @@ class LiquidGlassSidebar {
             height: ${size}px;
             left: ${x}px;
             top: ${y}px;
+            z-index: 1;
         `;
         
         element.style.position = 'relative';
@@ -105,60 +130,36 @@ class LiquidGlassSidebar {
         }, 600);
     }
 
-    setupInteractiveGlow() {
-        this.sidebar.addEventListener('mousemove', (e) => {
-            this.updateGlassGlow(e);
-        });
-        
-        this.sidebar.addEventListener('mouseleave', () => {
-            this.resetGlassGlow();
-        });
-    }
-
-    updateGlassGlow(event) {
-        const rect = this.sidebar.getBoundingClientRect();
-        const x = event.clientX - rect.left;
-        const y = event.clientY - rect.top;
-        
-        const glowIntensity = Math.min(0.2, (y / rect.height) * 0.3);
-        
-        this.sidebar.style.setProperty('--glass-glow', 
-            `0 0 80px rgba(255, 255, 255, ${glowIntensity})`);
-    }
-
-    resetGlassGlow() {
-        this.sidebar.style.setProperty('--glass-glow', 
-            '0 0 80px rgba(255, 255, 255, 0.1)');
-    }
-
     applySidebarState() {
         if (this.isRecolhida) {
-            this.sidebar.classList.add('recolhida');
-            document.body.classList.add('sidebar-recolhida');
-            this.toggleBtn.innerHTML = '<span class="toggle-icon">☰</span>';
+            this.collapseSidebar();
         } else {
-            this.sidebar.classList.remove('recolhida');
-            document.body.classList.remove('sidebar-recolhida');
-            this.toggleBtn.innerHTML = '<span class="toggle-icon">←</span>';
+            this.expandSidebar();
         }
+    }
+
+    collapseSidebar() {
+        this.sidebar.classList.add('recolhida');
+        document.body.classList.add('sidebar-recolhida');
+        this.toggleBtn.innerHTML = '<span class="toggle-icon">☰</span>';
+    }
+
+    expandSidebar() {
+        this.sidebar.classList.remove('recolhida');
+        document.body.classList.remove('sidebar-recolhida');
+        this.toggleBtn.innerHTML = '<span class="toggle-icon">←</span>';
     }
 
     toggleSidebar() {
         this.isRecolhida = !this.isRecolhida;
         
         if (this.isRecolhida) {
-            this.sidebar.classList.add('recolhida');
-            document.body.classList.add('sidebar-recolhida');
-            this.toggleBtn.innerHTML = '<span class="toggle-icon">☰</span>';
+            this.collapseSidebar();
         } else {
-            this.sidebar.classList.remove('recolhida');
-            document.body.classList.remove('sidebar-recolhida');
-            this.toggleBtn.innerHTML = '<span class="toggle-icon">←</span>';
+            this.expandSidebar();
         }
         
         localStorage.setItem('sidebarRecolhida', this.isRecolhida);
-        
-        // Efeito de transição líquida
         this.animateSidebarTransition();
     }
 
@@ -168,21 +169,78 @@ class LiquidGlassSidebar {
             this.sidebar.style.animation = 'liquidEnter 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
         }, 10);
     }
+
+    // Métodos públicos para controle externo
+    open() {
+        this.isRecolhida = false;
+        this.expandSidebar();
+        localStorage.setItem('sidebarRecolhida', 'false');
+    }
+
+    close() {
+        this.isRecolhida = true;
+        this.collapseSidebar();
+        localStorage.setItem('sidebarRecolhida', 'true');
+    }
 }
 
-// ===== INICIALIZAÇÃO =====
+// ===== INICIALIZAÇÃO SEGURA =====
 document.addEventListener('DOMContentLoaded', () => {
-    window.liquidGlassSidebar = new LiquidGlassSidebar();
+    try {
+        window.liquidGlassSidebar = new LiquidGlassSidebar();
+    } catch (error) {
+        console.error('❌ Erro ao inicializar LiquidGlassSidebar:', error);
+    }
 });
 
-// Adicionar estilo de ripple dinamicamente
-const style = document.createElement('style');
-style.textContent = `
-    @keyframes ripple {
-        to {
-            transform: scale(2.5);
-            opacity: 0;
+
+
+// ===== GERENCIAR CHAT ATIVO =====
+document.addEventListener('DOMContentLoaded', () => {
+    const threadList = document.getElementById('thread-list');
+
+    if (!threadList) return;
+
+    threadList.addEventListener('click', (event) => {
+        const item = event.target.closest('.chat-item');
+        if (!item) return;
+
+        // remover active antigo
+        document.querySelectorAll('.chat-item.active').forEach(li => {
+            li.classList.remove('active');
+        });
+
+        // adicionar active ao clicado
+        item.classList.add('active');
+    });
+});
+
+
+// Adicionar CSS do ripple se não existir
+if (!document.querySelector('#ripple-styles')) {
+    const style = document.createElement('style');
+    style.id = 'ripple-styles';
+    style.textContent = `
+        @keyframes ripple {
+            to {
+                transform: scale(2.5);
+                opacity: 0;
+            }
         }
-    }
-`;
-document.head.appendChild(style);
+        
+        .glass-button,
+        .glass-option,
+        .nav-item {
+            position: relative;
+            overflow: hidden;
+        }
+        
+        /* Estado recolhido - desativar alguns efeitos */
+        #sidebar.liquid-glass.recolhida .glass-button,
+        #sidebar.liquid-glass.recolhida .glass-option {
+            transform: none !important;
+            box-shadow: none !important;
+        }
+    `;
+    document.head.appendChild(style);
+}

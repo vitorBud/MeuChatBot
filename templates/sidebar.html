@@ -70,23 +70,9 @@
             </svg>
             Apagar chat
           </button>
-          <button id="limpar-chat" class="menu-item glass-option" type="button">
-            <svg viewBox="0 0 24 24" class="icon-sm">
-              <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
-            </svg>
-            Limpar mensagens
-          </button>
 
           <div class="menu-sep"></div>
 
-          <div class="menu-section">Labs</div>
-          <button class="menu-item glass-option" type="button"
-                  onclick="document.querySelector('.nav-item[data-view=&quot;previsoes-view&quot;]').click()">
-            <svg viewBox="0 0 24 24" class="icon-sm">
-              <path d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z"/>
-            </svg>
-            Previsões (Labs)
-          </button>
         </div>
       </details>
     </div>
@@ -124,6 +110,12 @@
       </ul>
     </section>
 
+
+  </div> <!-- fim .sb-scroll -->
+
+  <!-- RODAPÉ FIXO -->
+  <footer class="sb-footer glass-panel">
+
     <!-- NAVEGAÇÃO ENTRE VIEWS -->
     <nav class="sb-view-nav glass-panel">
       <button class="nav-item glass-option active" type="button" data-view="chat-view">
@@ -137,33 +129,9 @@
       </button>
     </nav>
 
-  </div> <!-- fim .sb-scroll -->
-
-  <!-- RODAPÉ FIXO -->
-  <footer class="sb-footer glass-panel">
-    <div class="footer-actions">
-      <button class="sb-link glass-option" id="sb-limpar-chat" type="button">
-        <svg viewBox="0 0 24 24" class="icon-sm">
-          <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
-        </svg>
-        Limpar chat
-      </button>
-      <button class="sb-link glass-option" id="sb-exportar-chat" type="button">
-        <svg viewBox="0 0 24 24" class="icon-sm">
-          <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
-        </svg>
-        Exportar
-      </button>
-    </div>
-
     <div class="sb-version-box">
       <span class="sb-version">OrionAI v1.0</span>
-      <button id="btn-about" class="sb-link glass-option" type="button">
-        <svg viewBox="0 0 24 24" class="icon-sm">
-          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
-        </svg>
-        Sobre
-      </button>
+      
     </div>
   </footer>
 </aside>

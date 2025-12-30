@@ -18,6 +18,9 @@ from urllib.parse import urljoin
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 import random
+from dotenv import load_dotenv
+load_dotenv()
+
 
 
 # Configure logging
@@ -37,9 +40,10 @@ def get_session() -> requests.Session:
         retry_strategy = Retry(
             total=3,
             status_forcelist=[429, 500, 502, 503, 504],
-            method_whitelist=["HEAD", "GET", "POST", "PUT", "DELETE", "OPTIONS", "TRACE"],
+            allowed_methods=["HEAD", "GET", "POST", "PUT", "DELETE", "OPTIONS", "TRACE"],
             backoff_factor=1
         )
+
         
         # Mount adapters for HTTP and HTTPS
         adapter = HTTPAdapter(max_retries=retry_strategy, pool_connections=10, pool_maxsize=20)

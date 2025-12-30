@@ -14,6 +14,8 @@ from datetime import datetime, timedelta, timezone
 
 
 from flask import Flask, render_template, request, jsonify, Response, stream_with_context
+from flask_cors import CORS
+
 
 # Multi-provedor (Gemini / Ollama) — aproveita seu provider atual:
 from providers import call_llm
@@ -114,7 +116,12 @@ class LLMClient:
         )
         try:
             final = call_llm(critic_prompt, self.cfg.BOT_PERSONA, self.cfg.gen_cfg())
-            return final or draft
+            if not final or final.strip() == "":
+                log.warning("Refine retornou vazio. Usando o draft.")
+                return draft
+
+            return final
+
         except Exception:
             log.exception("Falha no refine; retornando draft")
             return draft
@@ -915,48 +922,62 @@ class ChatService:
         self.rag = rag
         self.tools = tools
 
-    @lru_cache(maxsize=256)
-    def _cached_answer(self, norm_q:str, prompt:str, persona:str, cfg_tuple:tuple):
-        return call_llm(prompt, persona, {
-            "temperature": cfg_tuple[0], "topP": cfg_tuple[1], "maxOutputTokens": cfg_tuple[2]
-        })
+    def answer_sync(self, pergunta: str) -> str:
+        pergunta = (pergunta or "").strip()
+        if not pergunta:
+            return "Sua mensagem está vazia. Pode tentar novamente?"
 
-    def _compose_prompt(self, pergunta:str) -> str:
-        return self.rag.compose_with_context(pergunta)
-
-    def answer_sync(self, pergunta:str) -> str:
-        # Slash-commands
+        # ----------------------------------------------------------------------
+        # 1) Slash Commands
+        # ----------------------------------------------------------------------
         if pergunta.startswith("/calc "):
             try:
                 return self.tools.calc(pergunta[6:])
             except Exception as e:
                 return f"Erro no calc: {e}"
+
         if pergunta.startswith("/http "):
             txt = self.tools.safe_http_get(pergunta[6:].strip())
             return txt or "URL não permitida ou vazia."
+
         if pergunta.startswith("/rss "):
-            items = self.tools.rss_search(pergunta[5:].strip(), n=8)
+            termo = pergunta[5:].strip()
+            items = self.tools.rss_search(termo, n=8)
             if not items:
                 return "Nada encontrado."
             lista = "\n".join([f"- [{i['title']}]({i['link']})" for i in items])
-            return f"**RSS** sobre “{pergunta[5:].strip()}”:\n\n{lista}"
+            return f"**RSS sobre “{termo}”**:\n\n{lista}"
 
-        gen = self.cfg.gen_cfg()
-        cfg_tuple = (gen["temperature"], gen["topP"], gen["maxOutputTokens"])
-        final_prompt = self._compose_prompt(pergunta)
-        norm_q = _norm(final_prompt)
+        # ----------------------------------------------------------------------
+        # 2) Prompt FINAL — sem refine, sem RAG, sem cache
+        # ----------------------------------------------------------------------
+        final_prompt = pergunta
+        persona = self.cfg.BOT_PERSONA
+        gen_cfg = self.cfg.gen_cfg()
 
-        # Draft
+        # ----------------------------------------------------------------------
+        # 3) Chamada direta ao LLM (apenas 1 vez)
+        # ----------------------------------------------------------------------
         try:
-            draft = self._cached_answer(norm_q, final_prompt, self.cfg.BOT_PERSONA, cfg_tuple)
-            if not draft:
-                draft = "Não consegui gerar resposta agora. Tente reformular a pergunta."
+            resposta = call_llm(final_prompt, persona, gen_cfg)
         except Exception as e:
-            log.exception("Falha no draft")
-            draft = f"Erro na geração: {e}"
+            log.exception("Erro ao chamar o LLM")
+            return f"Erro ao gerar resposta: {e}"
 
-        # Crítica
-        return self.llm.refine(pergunta, draft)
+        # ----------------------------------------------------------------------
+        # 4) Caso venha vazio (falha rara do Gemini)
+        # ----------------------------------------------------------------------
+        if not resposta or not resposta.strip():
+            return "Não consegui gerar uma resposta agora. Tente novamente."
+
+        # ----------------------------------------------------------------------
+        # 5) Retorno final
+        # ----------------------------------------------------------------------
+        return resposta
+
+
+
+
 
     def answer_stream(self, q:str):
         """Gera SSE em modo streaming (Ollama nativo; Gemini -> chunk local)."""
@@ -1001,7 +1022,12 @@ class OrionAIApp:
         self.analytics = AnalyticsService(self.cfg, self.llm)
         self.chat = ChatService(self.cfg, self.llm, self.rag, self.tools)
         self.app = Flask(__name__)
+
+        # HABILITA CORS GLOBALMENTE
+        CORS(self.app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
+
         self._routes()
+
 
     # --------------------------- Controllers / Rotas -------------------------
     def _routes(self):
@@ -1011,18 +1037,35 @@ class OrionAIApp:
         news = self.news
         analytics = self.analytics
 
-        @app.get("/")
-        def index():
-            return render_template("index.html")
+        # @app.get("/")
+        # def index():
+        #     return render_template("index.html")
 
         @app.post("/responder")
         def responder():
-            dados = request.get_json(force=True) or {}
-            pergunta = (dados.get("mensagem") or "").strip()
-            if not pergunta:
-                return jsonify({"resposta": "Manda a pergunta"}), 400
-            final = chat.answer_sync(pergunta)
-            return jsonify({"resposta": final}), 200
+            try:
+                dados = request.get_json(force=True) or {}
+                pergunta = (dados.get("mensagem") or "").strip()
+
+                if not pergunta:
+                    return jsonify({"resposta": "Manda a pergunta"}), 400
+
+                # Tenta gerar resposta usando o LLM
+                final = chat.answer_sync(pergunta)
+                return jsonify({"resposta": final}), 200
+
+            except Exception as e:
+                # Loga o erro REAL do backend no terminal
+                print("\n====================================")
+                print("ERRO NO /responder:")
+                print(e)
+                print("====================================\n")
+
+                # Retorna erro legível para o front ver
+                return jsonify({
+                    "resposta": f"ERRO_INTERNO_BACKEND: {str(e)}"
+                }), 500
+
 
         @app.get("/responder_stream")
         def responder_stream():

@@ -1,0 +1,709 @@
+/* ===== LIQUID GLASS SIDEBAR PROFISSIONAL ===== */
+/* Usando as variáveis do style.css principal */
+
+#sidebar {
+  --sidebar-width: 320px;
+  --sidebar-collapsed: 80px;
+  
+  /* Base de vidro líquido profissional */
+  background: var(--surface-primary);
+  backdrop-filter: var(--blur-lg) saturate(180%);
+  -webkit-backdrop-filter: var(--blur-lg) saturate(180%);
+  
+  /* Bordas e sombras profissionais */
+  border-right: 1px solid var(--border-primary);
+  box-shadow: 
+    var(--shadow-glass),
+    inset 1px 0 0 rgba(255, 255, 255, 0.1);
+  
+  /* Layout */
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: var(--sidebar-width);
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 1000;
+  transition: all var(--transition-normal);
+  overflow: hidden;
+}
+
+/* Overlay interno para profundidade */
+#sidebar::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--glass-gradient);
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* ===== CABEÇALHO PROFISSIONAL ===== */
+.sb-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-bottom: 1px solid var(--border-primary);
+  flex-shrink: 0;
+  position: relative;
+  z-index: 10;
+  background: var(--surface-secondary);
+  backdrop-filter: var(--blur-md);
+  -webkit-backdrop-filter: var(--blur-md);
+}
+
+/* Botão Toggle - Estilo Liquid Profissional */
+.sb-toggle {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--text-primary);
+  background: var(--surface-tertiary);
+  border: 1px solid var(--border-primary);
+  transition: all var(--transition-normal);
+  flex-shrink: 0;
+}
+
+.sb-toggle:hover {
+  background: var(--surface-hover);
+  transform: scale(1.05) rotate(90deg);
+  box-shadow: var(--shadow-sm);
+}
+
+.sb-toggle:active {
+  transform: scale(0.95) rotate(90deg);
+}
+
+/* Logo Profissional */
+.sb-logo {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex: 1;
+  min-width: 0;
+}
+
+.sb-logo-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-inverse);
+  font-size: 18px;
+  font-weight: var(--fw-bold);
+  flex-shrink: 0;
+  background: var(--accent-gradient);
+  box-shadow: var(--shadow-sm);
+}
+
+.sb-logo-text {
+  font-size: var(--fs-lg);
+  font-weight: var(--fw-bold);
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: all var(--transition-normal);
+}
+
+.gradient-text {
+  background: var(--accent-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ===== BOTÕES PROFISSIONAIS ===== */
+.icon-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--text-tertiary);
+  background: transparent;
+  border: 1px solid transparent;
+  transition: all var(--transition-normal);
+}
+
+.icon-btn:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+  border-color: var(--border-primary);
+  transform: scale(1.05);
+  box-shadow: var(--shadow-sm);
+}
+
+.icon-btn:active {
+  transform: scale(0.95);
+}
+
+.icon {
+  width: 20px;
+  height: 20px;
+  fill: currentColor;
+}
+
+/* ===== DROPDOWN PROFISSIONAL ===== */
+.sb-profile-menu {
+  position: relative;
+}
+
+.dropdown {
+  position: relative;
+}
+
+.dropdown .menu {
+  display: none;
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: var(--space-2);
+  min-width: 220px;
+  z-index: 1000;
+  border-radius: var(--radius-lg);
+  padding: var(--space-3);
+  background: var(--system-background-elevated);
+  border: 1px solid var(--border-primary);
+  backdrop-filter: var(--blur-lg);
+  -webkit-backdrop-filter: var(--blur-lg);
+  box-shadow: var(--shadow-xl);
+}
+
+.dropdown[open] .menu {
+  display: block;
+  animation: floatIn 0.3s var(--transition-bounce);
+}
+
+.menu-section {
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: var(--space-3) var(--space-4) var(--space-2);
+  margin: calc(-1 * var(--space-3)) calc(-1 * var(--space-3)) var(--space-2);
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: var(--fs-sm);
+  cursor: pointer;
+  border-radius: var(--radius-md);
+  transition: all var(--transition-normal);
+  text-align: left;
+}
+
+.menu-item:hover {
+  background: var(--surface-hover);
+  transform: translateX(4px);
+}
+
+.menu-sep {
+  height: 1px;
+  background: var(--border-primary);
+  margin: var(--space-2) calc(-1 * var(--space-3));
+  opacity: 0.5;
+}
+
+.menu-item.danger {
+  color: var(--red);
+}
+
+.menu-item.danger:hover {
+  background: rgba(255, 59, 48, 0.1);
+}
+
+/* ===== ÁREA SCROLLÁVEL PROFISSIONAL ===== */
+.sb-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  
+  /* Scrollbar estilizada */
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-primary) transparent;
+}
+
+.sb-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sb-scroll::-webkit-scrollbar-thumb {
+  background: var(--border-primary);
+  border-radius: var(--radius-full);
+}
+
+.sb-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--text-tertiary);
+}
+
+/* ===== BUSCA PROFISSIONAL ===== */
+.sb-search {
+  position: relative;
+}
+
+.search-container {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-lg);
+  background: var(--surface-secondary);
+  border: 1px solid var(--border-primary);
+  transition: all var(--transition-normal);
+}
+
+.search-container:focus-within {
+  background: var(--surface-primary);
+  border-color: var(--border-accent);
+  box-shadow: 
+    0 0 0 3px rgba(0, 122, 255, 0.1),
+    var(--shadow-sm);
+  transform: translateY(-1px);
+}
+
+.search-icon {
+  width: 18px;
+  height: 18px;
+  fill: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
+.search-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text-primary);
+  font-size: var(--fs-base);
+  font-family: inherit;
+}
+
+.search-input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.search-input:focus {
+  outline: none;
+}
+
+/* ===== LISTA DE CHATS PROFISSIONAL ===== */
+.sb-chats-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-3);
+}
+
+.section-title {
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.count-badge {
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  color: var(--text-primary);
+  padding: 4px 8px;
+  border-radius: var(--radius-full);
+  background: var(--surface-tertiary);
+  border: 1px solid var(--border-primary);
+}
+
+.sb-chat-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* Items da lista - estilo profissional */
+.chat-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: all var(--transition-normal);
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--border-primary);
+  background: var(--surface-secondary);
+  backdrop-filter: var(--blur-sm);
+  -webkit-backdrop-filter: var(--blur-sm);
+}
+
+.chat-item::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.1) 0%,
+    transparent 50%,
+    rgba(255, 255, 255, 0.05) 100%
+  );
+  opacity: 0;
+  transition: opacity var(--transition-normal);
+}
+
+.chat-item:hover {
+  background: var(--surface-hover);
+  border-color: var(--border-accent);
+  transform: translateX(4px) translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+.chat-item:hover::before {
+  opacity: 1;
+}
+
+.chat-item.active {
+  background: var(--blue-glass);
+  border-color: var(--border-accent);
+  color: var(--text-primary);
+  transform: translateX(6px);
+}
+
+.chat-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.chat-title {
+  font-weight: var(--fw-semibold);
+  font-size: var(--fs-sm);
+  color: inherit;
+  margin-bottom: var(--space-1);
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chat-preview {
+  font-size: var(--fs-xs);
+  color: inherit;
+  opacity: 0.8;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.chat-time {
+  font-size: var(--fs-xs);
+  color: var(--text-tertiary);
+  opacity: 0.7;
+  flex-shrink: 0;
+}
+
+/* ===== NAVEGAÇÃO PROFISSIONAL ===== */
+.sb-view-nav {
+  display: flex;
+  border-radius: var(--radius-lg);
+  padding: var(--space-2);
+  gap: var(--space-2);
+  background: var(--surface-secondary);
+  border: 1px solid var(--border-primary);
+}
+
+.nav-item {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  cursor: pointer;
+  transition: all var(--transition-normal);
+  font-weight: var(--fw-medium);
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+  position: relative;
+  overflow: hidden;
+}
+
+.nav-item::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.15) 0%,
+    rgba(255, 255, 255, 0.05) 100%
+  );
+  opacity: 0;
+  transition: opacity var(--transition-normal);
+}
+
+.nav-item:hover::before {
+  opacity: 1;
+}
+
+.nav-item:hover {
+  color: var(--text-primary);
+  transform: translateY(-1px);
+}
+
+.nav-item.active {
+  background: var(--surface-primary);
+  color: var(--blue);
+  box-shadow: var(--shadow-sm);
+}
+
+.nav-icon {
+  font-size: 16px;
+  transition: transform var(--transition-normal);
+}
+
+.nav-item:hover .nav-icon {
+  transform: scale(1.1);
+}
+
+.nav-text {
+  transition: all var(--transition-normal);
+}
+
+/* ===== RODAPÉ PROFISSIONAL ===== */
+.sb-footer {
+  margin-top: auto;
+  border-top: 1px solid var(--border-primary);
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  background: var(--surface-secondary);
+}
+
+.footer-actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.sb-link {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  background: transparent;
+  border: none;
+  color: var(--text-tertiary);
+  font-size: var(--fs-sm);
+  cursor: pointer;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  transition: all var(--transition-normal);
+  font-weight: var(--fw-medium);
+}
+
+.sb-link:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+  transform: translateX(2px);
+}
+
+.sb-version-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border-primary);
+}
+
+.sb-version {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  font-weight: var(--fw-medium);
+}
+
+/* ===== ANIMAÇÕES PROFISSIONAIS ===== */
+@keyframes floatIn {
+  0% {
+    opacity: 0;
+    transform: translateY(20px) scale(0.9);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Aplicar animações */
+.sb-chat-list li {
+  animation: floatIn 0.5s var(--transition-bounce) both;
+}
+
+.sb-chat-list li:nth-child(1) { animation-delay: 0.1s; }
+.sb-chat-list li:nth-child(2) { animation-delay: 0.15s; }
+.sb-chat-list li:nth-child(3) { animation-delay: 0.2s; }
+.sb-chat-list li:nth-child(4) { animation-delay: 0.25s; }
+
+/* ===== ESTADO RECOLHIDO ===== */
+#sidebar.recolhida {
+  width: var(--sidebar-collapsed);
+}
+
+/* Esconde conteúdo quando recolhida */
+#sidebar.recolhida .sb-scroll,
+#sidebar.recolhida .sb-footer,
+#sidebar.recolhida .sb-logo,
+#sidebar.recolhida .sb-profile-menu {
+  display: none;
+}
+
+/* Mantém apenas o toggle */
+#sidebar.recolhida .sb-toggle {
+  display: flex;
+  margin: var(--space-4) auto;
+}
+
+/* ===== TEMA ESCURO ===== */
+[data-theme="dark"] #sidebar {
+  background: var(--surface-primary);
+  border-right: 1px solid var(--border-primary);
+  box-shadow: 
+    var(--shadow-glass),
+    inset 1px 0 0 rgba(255, 255, 255, 0.05);
+}
+
+[data-theme="dark"] .chat-item {
+  border: 1px solid var(--border-primary);
+  background: var(--surface-secondary);
+}
+
+[data-theme="dark"] .chat-item:hover {
+  border-color: var(--border-accent);
+}
+
+[data-theme="dark"] .chat-item.active {
+  background: var(--blue-glass);
+  border-color: var(--border-accent);
+}
+
+/* ===== RESPONSIVIDADE PROFISSIONAL ===== */
+@media (max-width: 1024px) {
+  #sidebar {
+    width: 280px;
+  }
+  
+  #sidebar.recolhida {
+    width: 72px;
+  }
+}
+
+@media (max-width: 768px) {
+  #sidebar {
+    transform: translateX(-100%);
+    width: 280px;
+    box-shadow: var(--shadow-xl);
+  }
+  
+  #sidebar.aberta {
+    transform: translateX(0);
+  }
+  
+  #sidebar.recolhida {
+    transform: translateX(-100%);
+    width: 280px;
+  }
+  
+  /* Overlay para mobile */
+  .sidebar-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+    z-index: 999;
+    display: none;
+  }
+  
+  .sidebar-overlay.active {
+    display: block;
+  }
+}
+
+/* ===== FOCUS STATES ===== */
+.icon-btn:focus-visible,
+.nav-item:focus-visible,
+.menu-item:focus-visible,
+.sb-link:focus-visible,
+.search-input:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* ===== MELHORIAS DE PERFORMANCE ===== */
+@media (prefers-reduced-motion: reduce) {
+  #sidebar,
+  .chat-item,
+  .sb-toggle,
+  .icon-btn,
+  .nav-item,
+  .sb-link,
+  .menu-item {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+/* Suporte para navegadores sem backdrop-filter */
+@supports not (backdrop-filter: blur(10px)) {
+  #sidebar {
+    background: var(--surface-primary);
+  }
+  
+  .dropdown .menu {
+    background: var(--system-background);
+  }
+  
+  .chat-item {
+    background: var(--surface-secondary);
+  }
+}

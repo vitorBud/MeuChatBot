@@ -1,6 +1,7 @@
 // src/components/sidebar.jsx
 import { useEffect, useRef, useState } from 'react';
 import '../styles/sidebar.css';
+import '../styles/sidebar.botao.css'
 
 const SIDEBAR_KEY = 'sidebarRecolhida';
 

@@ -237,7 +237,7 @@ body.sidebar-recolhida .app {
   backdrop-filter: var(--blur-lg) saturate(180%);
   -webkit-backdrop-filter: var(--blur-lg) saturate(180%);
   border-bottom: 1px solid var(--border-primary);
-  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+  border-radius: 5px;
   
   /* Sombra sutil */
   box-shadow: var(--shadow-sm);

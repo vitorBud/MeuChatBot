@@ -1,4 +1,5 @@
 /* ===== LIQUID GLASS PREVISÕES - PREMIUM EDITION ===== */
+/* VERSÃO COM GRÁFICOS DESTACADOS E RESPONSIVOS */
 
 /* Layout principal refinado */
 .previsoes-layout {
@@ -7,8 +8,8 @@
   grid-template-rows: auto 1fr;
   gap: var(--space-6);
   padding: var(--space-6);
-  height: calc(100vh - 80px);
-  min-height: 500px;
+  height: calc(100vh - 60px); /* Reduzido de 80px para 60px */
+  min-height: 600px; /* Aumentado de 500px para 600px */
   background: var(--system-background);
   position: relative;
   overflow: hidden;
@@ -29,7 +30,7 @@
   }
 }
 
-/* Header premium */
+/* Header */
 .pv-top {
   grid-column: 1 / -1;
   display: flex;
@@ -511,6 +512,8 @@
   }
 }
 
+/* ===== ÁREA DE GRÁFICOS OTIMIZADA ===== */
+
 /* Painel de Analytics Liquid Glass */
 .pv-analytics {
   grid-column: 2;
@@ -519,20 +522,21 @@
   gap: var(--space-6);
   min-height: 0;
   height: 100%;
+  overflow: visible; /* CRÍTICO: permite que gráficos se estendam */
 }
 
-/* Cards premium */
+/* Cards premium com foco em gráficos */
 .pv-card {
   flex: 1;
   border: 1px solid var(--border-primary);
   border-radius: var(--radius-xl);
   background: var(--surface-primary);
-  padding: var(--space-6);
+  padding: var(--space-5); /* Reduzido de space-6 para space-5 */
   display: flex;
   flex-direction: column;
-  min-height: 0;
+  min-height: 320px; /* Aumentado de altura mínima */
   position: relative;
-  overflow: hidden;
+  overflow: visible; /* ALTERADO: de hidden para visible */
   backdrop-filter: var(--blur-md);
   -webkit-backdrop-filter: var(--blur-md);
   box-shadow: var(--shadow-md);
@@ -554,15 +558,27 @@
     pointer-events: none;
     z-index: -1;
   }
+  
+  /* Classe para cards que contêm gráficos */
+  .pv-card.has-chart {
+  display: flex;
+  flex-direction: column;
+  }
+
+  .pv-card.has-chart .pv-chart-container {
+    flex: 1;
+  }
+
 }
 
 .pv-card-head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  margin-bottom: var(--space-4);
+  margin-bottom: var(--space-3); /* Reduzido de space-4 */
   flex-wrap: wrap;
-  gap: var(--space-3);
+  gap: var(--space-2); /* Reduzido de space-3 */
+  min-height: 40px; /* Altura mínima fixa */
 }
 
 .pv-card-title {
@@ -572,6 +588,31 @@
   margin: 0;
   letter-spacing: -0.02em;
   line-height: 1.3;
+}
+
+/* Container especial para gráficos */
+.pv-chart-container {
+  flex: 1;
+  position: relative;
+  width: 100%;
+  min-height: 240px; /* Altura mínima garantida */
+  margin-top: var(--space-3);
+  overflow: visible !important; /* IMPEDE CORTE DE GRÁFICOS */
+  z-index: 10;
+}
+
+/* Gráfico premium - VERSÃO OTIMIZADA */
+#pv-canvas {
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
+}
+
+
+/* Gráficos em destaque */
+.chart-featured {
+  min-height: 300px !important;
+  max-height: 450px !important;
 }
 
 /* Badge de Tendência premium */
@@ -618,12 +659,13 @@
   }
 }
 
-/* Stats em Grid premium */
+/* Stats em Grid premium - mais compacto */
 .pv-stats {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
   gap: var(--space-3);
-  margin-bottom: var(--space-4);
+  margin-bottom: var(--space-3); /* Reduzido de space-4 */
+  min-height: 80px; /* Altura consistente */
   
   .pv-stat {
     padding: var(--space-4);
@@ -661,28 +703,20 @@
   }
 }
 
-/* Gráfico premium */
-#pv-canvas {
-  width: 100% !important;
-  height: 240px !important;
-  background: transparent;
-  border-radius: var(--radius-lg);
-  flex: 1;
-}
-
-/* Card de Artigos premium */
+/* Card de Artigos premium - mais compacto */
 .pv-articles-card {
   border: 1px solid var(--border-primary);
   border-radius: var(--radius-xl);
   background: var(--surface-primary);
-  padding: var(--space-6);
+  padding: var(--space-5); /* Reduzido de space-6 */
   display: flex;
   flex-direction: column;
-  max-height: 280px;
-  min-height: 280px;
+  max-height: 260px; /* Reduzido de 280px */
+  min-height: 260px; /* Reduzido de 280px */
   
   .pv-card-title {
-    margin-bottom: var(--space-4);
+    margin-bottom: var(--space-3); /* Reduzido de space-4 */
+    min-height: 32px;
   }
   
   .pv-articles {
@@ -780,7 +814,24 @@
   }
 }
 
-/* ===== RESPONSIVIDADE PREMIUM ===== */
+/* ===== RESPONSIVIDADE OTIMIZADA PARA GRÁFICOS ===== */
+
+/* Desktop Grande (1440px+) - MAIS ESPAÇO */
+@media (min-width: 1440px) {
+  .previsoes-layout {
+    grid-template-columns: 450px 1fr;
+    height: calc(100vh - 40px);
+  }
+  
+  .pv-chart-container {
+    min-height: 280px;
+    max-height: 450px;
+  }
+  
+  #pv-canvas {
+    max-height: 400px !important;
+  }
+}
 
 /* Tablet (1024px) */
 @media (max-width: 1024px) {
@@ -803,14 +854,21 @@
     grid-row: 3;
     flex-direction: column;
     gap: var(--space-4);
+    overflow: visible;
   }
   
   .pv-card {
-    min-height: 300px;
+    min-height: 350px; /* Aumentado de 300px */
+    overflow: visible;
+  }
+  
+  .pv-chart-container {
+    min-height: 260px;
   }
   
   .pv-articles-card {
-    max-height: 280px;
+    max-height: 240px; /* Reduzido de 280px */
+    min-height: 240px;
   }
 }
 
@@ -825,6 +883,7 @@
     gap: var(--space-3);
     padding: var(--space-3);
     border-radius: var(--radius-lg);
+    min-height: 72px;
   }
   
   .pv-actions {
@@ -845,16 +904,29 @@
     padding: 8px 12px;
   }
   
+  .pv-card {
+    min-height: 380px; /* Maior em mobile landscape */
+    padding: var(--space-4);
+  }
+  
+  .pv-chart-container {
+    min-height: 280px;
+  }
+  
+  #pv-canvas {
+    min-height: 240px !important;
+  }
+  
   .pv-stats {
     grid-template-columns: 1fr 1fr;
   }
 }
 
-/* Mobile Portrait (480px) */
+/* Mobile Portrait (480px) - FOCO TOTAL EM GRÁFICOS */
 @media (max-width: 480px) {
   .previsoes-layout {
     padding: var(--space-2);
-    gap: var(--space-2);
+    gap: var(--space-3); /* Aumentado de space-2 */
   }
   
   .pv-top {
@@ -874,8 +946,36 @@
     width: 100%;
   }
   
+  .pv-card {
+    min-height: 400px; /* Máxima altura para gráficos */
+    padding: var(--space-3);
+    overflow: visible;
+  }
+  
+  .pv-chart-container {
+    min-height: 300px; /* Gráficos muito visíveis */
+    margin-top: var(--space-2);
+  }
+  
+  #pv-canvas {
+    min-height: 260px !important;
+  }
+  
   .pv-stats {
     grid-template-columns: 1fr;
+    gap: var(--space-2);
+    margin-bottom: var(--space-2);
+  }
+  
+  .pv-card-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-1);
+    margin-bottom: var(--space-2);
+  }
+  
+  .pv-card-title {
+    font-size: var(--fs-base);
   }
   
   .pv-composer {
@@ -886,26 +986,99 @@
       width: 100%;
     }
   }
-  
-  .pv-card {
-    padding: var(--space-4);
-  }
 }
 
 /* Altura pequena */
 @media (max-height: 700px) {
   .previsoes-layout {
-    height: calc(100vh - 60px);
+    height: calc(100vh - 40px); /* Reduzido de 60px */
+    min-height: 500px;
   }
   
   .pv-panel {
-    max-height: 300px;
+    max-height: 280px; /* Reduzido de 300px */
+  }
+  
+  .pv-card {
+    min-height: 240px;
+    padding: var(--space-4);
+  }
+  
+  .pv-chart-container {
+    min-height: 180px;
+    max-height: 200px;
+  }
+  
+  #pv-canvas {
+    min-height: 160px !important;
+    max-height: 180px !important;
   }
   
   .pv-articles-card {
-    max-height: 220px;
-    min-height: 220px;
+    max-height: 180px; /* Reduzido de 220px */
+    min-height: 180px;
   }
+  
+  /* Otimizações para telas baixas */
+  .pv-legend {
+    font-size: 10px;
+    gap: var(--space-1);
+  }
+  
+  .pv-stats .pv-stat {
+    padding: var(--space-2);
+  }
+  
+  .pv-stats .value {
+    font-size: var(--fs-xl);
+  }
+}
+
+/* Altura muito pequena (MODO DE SOBREVIVÊNCIA) */
+@media (max-height: 500px) {
+  .previsoes-layout {
+    grid-template-rows: auto 1fr;
+    gap: var(--space-2);
+  }
+  
+  .pv-card-head {
+    display: none; /* Economiza espaço */
+  }
+  
+  .pv-chart-container {
+    min-height: 140px;
+    max-height: 160px;
+  }
+  
+  #pv-canvas {
+    min-height: 120px !important;
+    max-height: 140px !important;
+  }
+  
+  .pv-articles-card {
+    display: none; /* Remove completamente em telas muito baixas */
+  }
+}
+
+/* ===== CORREÇÕES DE OVERFLOW ===== */
+.pv-card,
+.pv-analytics,
+.pv-panel,
+.previsoes-layout {
+  box-sizing: border-box;
+}
+
+/* Garante que gráficos nunca sejam cortados */
+.pv-analytics,
+.pv-chart-container,
+#pv-canvas {
+  overflow: visible !important;
+}
+
+/* Tooltips de gráficos acima de tudo */
+.chartjs-tooltip {
+  z-index: 9999 !important;
+  position: absolute !important;
 }
 
 /* ===== SCROLLBARS PREMIUM ===== */
@@ -1002,7 +1175,13 @@
   animation: cardAppear 0.5s var(--transition-bounce) 0.1s backwards;
 }
 
-/* ===== IMPRESSÃO ===== */
+/* Animações suaves para redimensionamento de gráficos */
+.pv-chart-container,
+#pv-canvas {
+  transition: min-height 0.3s ease, max-height 0.3s ease;
+}
+
+/* ===== IMPRESSÃO OTIMIZADA ===== */
 @media print {
   .pv-top,
   .pv-composer,
@@ -1022,6 +1201,16 @@
     box-shadow: none !important;
     border: 1px solid #ddd !important;
   }
+  
+  .pv-chart-container {
+    min-height: 300px !important;
+    max-height: none !important;
+  }
+  
+  #pv-canvas {
+    height: 250px !important;
+    max-height: none !important;
+  }
 }
 
 /* ===== PERFORMANCE ===== */
@@ -1031,4 +1220,32 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* ===== UTILITÁRIOS PARA GRÁFICOS ===== */
+/* Use essas classes no seu HTML para melhor controle */
+
+/* Container responsivo para qualquer gráfico */
+.chart-wrapper {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 200px;
+}
+
+/* Classe para forçar proporção 16:9 */
+.chart-ratio-16-9 {
+  aspect-ratio: 16/9;
+}
+
+/* Classe para gráficos em grid */
+.chart-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: var(--space-4);
+}
+
+/* Classe para gráfico em destaque */
+.chart-featured {
+  grid-column: 1 / -1;
 }

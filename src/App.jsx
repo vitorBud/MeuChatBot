@@ -16,19 +16,16 @@ const createEmptyThread = () => ({
   createdAt: nowISO(),
 });
 
-// NOVO: Tipos para previsões ANUAIS
+// Estado simplificado para previsões
 const initialPrevisoesState = {
   temaAtual: '',
-  dados: null,
   historicoTemas: [],
   config: {
-    periodo: 'anual', // 'anual', 'trimestral', 'mensal'
-    tipoGrafico: 'linha', // linha, area, barras
+    periodo: 'anual',
+    tipoGrafico: 'linha',
     mediaMovel: true,
   },
   carregando: false,
-  artigos: [],
-  insights: [],
 };
 
 function App() {
@@ -38,21 +35,20 @@ function App() {
   const [messageText, setMessageText] = useState('');
   const [isSending, setIsSending] = useState(false);
   
-  // Estado para previsões
+  // Estado para previsões (simplificado)
   const [previsoesState, setPrevisoesState] = useState(initialPrevisoesState);
   const [pvTemaInput, setPvTemaInput] = useState('');
+  
+  // Estado sincronizado com módulo legacy
+  const [pvPeriodo, setPvPeriodo] = useState('anual');
+  const [pvChartType, setPvChartType] = useState('linha');
   
   const chatRef = useRef(null);
   const textareaRef = useRef(null);
   const controllerRef = useRef(null);
   
-  // Refs para integração com módulo legacy
-  const pvLogRef = useRef(null);
+  // Apenas a ref necessária para o canvas
   const pvCanvasRef = useRef(null);
-  const pvArticlesRef = useRef(null);
-  const pvStatsBoxRef = useRef(null);
-  const pvHistoricoRef = useRef(null);
-  const pvTrendRef = useRef(null);
 
   const currentThread = currentId ? threads[currentId] : null;
 
@@ -93,10 +89,22 @@ function App() {
     }
   }, [threads, currentId]);
 
-  // Inicializar módulo de previsões com refs
+  // Inicializar módulo de previsões
   useEffect(() => {
     if (activeView === 'previsoes-view' && pvCanvasRef.current) {
       initPrevisoes();
+      
+      // Sincronizar estado inicial com módulo legacy
+      const syncState = () => {
+        if (window.__previsoesDebug?.getState) {
+          const state = window.__previsoesDebug.getState();
+          setPvPeriodo(state.periodo || 'anual');
+          setPvChartType(state.chartType || 'linha');
+        }
+      };
+      
+      // Pequeno delay para garantir que o módulo foi inicializado
+      setTimeout(syncState, 100);
     }
   }, [activeView]);
 
@@ -119,6 +127,27 @@ function App() {
     autosize(e.target);
   };
 
+  // ---------- Funções utilitárias para threads ----------
+  const updateThreadMessages = (threadId, newMessages) => {
+    setThreads(prev => ({
+      ...prev,
+      [threadId]: {
+        ...prev[threadId],
+        messages: newMessages
+      }
+    }));
+  };
+
+  const updateThreadTitle = (threadId, newTitle) => {
+    setThreads(prev => ({
+      ...prev,
+      [threadId]: {
+        ...prev[threadId],
+        title: newTitle
+      }
+    }));
+  };
+
   // ---------- Threads ----------
   const handleNewThread = () => {
     const id = uid();
@@ -138,13 +167,7 @@ function App() {
     if (!novo || !strip(novo)) return;
 
     const title = strip(novo);
-    setThreads((prev) => ({
-      ...prev,
-      [currentId]: {
-        ...prev[currentId],
-        title,
-      },
-    }));
+    updateThreadTitle(currentId, title);
   };
 
   const handleDeleteCurrent = () => {
@@ -182,14 +205,7 @@ function App() {
     if (!window.confirm('Limpar todas as mensagens deste chat?')) return;
 
     controllerRef.current?.abort?.();
-
-    setThreads((prev) => ({
-      ...prev,
-      [currentId]: {
-        ...prev[currentId],
-        messages: [],
-      },
-    }));
+    updateThreadMessages(currentId, []);
   };
 
   const handleExportCurrent = () => {
@@ -243,7 +259,7 @@ function App() {
       at: nowISO(),
     };
 
-    // grava mensagem do usuário
+    // Grava mensagem do usuário
     setThreads((prev) => {
       const t = prev[targetThreadId];
       if (!t) return prev;
@@ -256,7 +272,7 @@ function App() {
       };
     });
 
-    // limpa input
+    // Limpa input
     setMessageText('');
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
@@ -264,7 +280,7 @@ function App() {
 
     setIsSending(true);
 
-    // cancela requisição anterior (se houver)
+    // Cancela requisição anterior (se houver)
     controllerRef.current?.abort?.();
     const controller = new AbortController();
     controllerRef.current = controller;
@@ -294,20 +310,14 @@ function App() {
         at: nowISO(),
       };
 
-      setThreads((prev) => {
-        const t = prev[targetThreadId];
-        if (!t) return prev;
-        return {
-          ...prev,
-          [targetThreadId]: {
-            ...t,
-            messages: [...t.messages, botMsg],
-          },
-        };
-      });
+      updateThreadMessages(targetThreadId, [
+        ...(threads[targetThreadId]?.messages || []),
+        userMsg,
+        botMsg
+      ]);
     } catch (err) {
       if (err?.name === 'AbortError') {
-        // requisição cancelada, ignora
+        // Requisição cancelada, ignora
       } else {
         console.error('[chat] responder:', err);
         const fallback = {
@@ -322,7 +332,7 @@ function App() {
             ...prev,
             [targetThreadId]: {
               ...t,
-              messages: [...t.messages, fallback],
+              messages: [...t.messages, userMsg, fallback],
             },
           };
         });
@@ -343,7 +353,7 @@ function App() {
     }
   };
 
-  // ---------- Funções para Previsões ANUAIS ----------
+  // ---------- Funções para Previsões ----------
   const handlePrevisoesSubmit = (e) => {
     e.preventDefault();
     const tema = strip(pvTemaInput);
@@ -361,7 +371,7 @@ function App() {
       window.__previsoesDebug.submitTema(tema);
     }
     
-    // Adicionar ao histórico
+    // Adicionar ao histórico React (backup apenas)
     setPrevisoesState(prev => ({
       ...prev,
       historicoTemas: [
@@ -378,10 +388,12 @@ function App() {
   };
 
   const handlePeriodoChange = (periodo) => {
+    // Atualizar estado local
     setPrevisoesState(prev => ({
       ...prev,
       config: { ...prev.config, periodo }
     }));
+    setPvPeriodo(periodo);
     
     // Atualizar módulo legacy
     if (window.__previsoesDebug?.setPeriodo) {
@@ -390,10 +402,12 @@ function App() {
   };
 
   const handleTipoGraficoChange = (tipo) => {
+    // Atualizar estado local
     setPrevisoesState(prev => ({
       ...prev,
       config: { ...prev.config, tipoGrafico: tipo }
     }));
+    setPvChartType(tipo);
     
     // Atualizar módulo legacy
     if (window.__previsoesDebug?.setChartType) {
@@ -403,10 +417,10 @@ function App() {
 
   const handleLimparPrevisoes = () => {
     setPrevisoesState(initialPrevisoesState);
+    setPvTemaInput('');
     // Chamar função de limpeza do módulo legacy
-    if (window.__previsoesDebug?.getState) {
-      const clearBtn = document.getElementById('pv-limpar');
-      if (clearBtn) clearBtn.click();
+    if (window.__previsoesDebug?.clearUI) {
+      window.__previsoesDebug.clearUI();
     }
   };
 
@@ -430,12 +444,10 @@ function App() {
 
   const handleSelecionarHistorico = (tema) => {
     setPvTemaInput(tema);
-    // Disparar submit automático
-    setTimeout(() => {
-      if (window.__previsoesDebug?.submitTema) {
-        window.__previsoesDebug.submitTema(tema);
-      }
-    }, 100);
+    // Disparar submit diretamente (não depende do estado)
+    if (window.__previsoesDebug?.submitTema) {
+      window.__previsoesDebug.submitTema(tema);
+    }
   };
 
   // ---------- Render ----------
@@ -465,7 +477,6 @@ function App() {
 
           <div className="top-actions">
             <button
-              id="limpar-chat-2"
               className="icon-btn"
               title="Limpar mensagens"
               type="button"
@@ -615,21 +626,21 @@ function App() {
                 aria-label="Período de análise"
               >
                 <button
-                  className={`seg-btn ${previsoesState.config.periodo === 'mensal' ? 'active' : ''}`}
+                  className={`seg-btn ${pvPeriodo === 'mensal' ? 'active' : ''}`}
                   onClick={() => handlePeriodoChange('mensal')}
                   type="button"
                 >
                   Mensal
                 </button>
                 <button
-                  className={`seg-btn ${previsoesState.config.periodo === 'trimestral' ? 'active' : ''}`}
+                  className={`seg-btn ${pvPeriodo === 'trimestral' ? 'active' : ''}`}
                   onClick={() => handlePeriodoChange('trimestral')}
                   type="button"
                 >
                   Trimestral
                 </button>
                 <button
-                  className={`seg-btn ${previsoesState.config.periodo === 'anual' ? 'active' : ''}`}
+                  className={`seg-btn ${pvPeriodo === 'anual' ? 'active' : ''}`}
                   onClick={() => handlePeriodoChange('anual')}
                   type="button"
                 >
@@ -637,8 +648,7 @@ function App() {
                 </button>
               </div>
 
-              {/* Controles de tipo de gráfico (agora controlado pelo módulo JS) */}
-              {/* O módulo previsoes.js irá criar esses botões dinamicamente */}
+              {/* Controles de tipo de gráfico serão adicionados pelo módulo JS */}
 
               <label className="pv-toggle">
                 <input 
@@ -691,7 +701,7 @@ function App() {
                     <span className="pv-tema-icon">📊</span>
                     Analisando: <strong>{previsoesState.temaAtual}</strong>
                     <span className="pv-periodo-badge">
-                      {previsoesState.config.periodo.toUpperCase()}
+                      {pvPeriodo.toUpperCase()}
                     </span>
                   </div>
                   {previsoesState.carregando && (
@@ -701,13 +711,14 @@ function App() {
               )}
 
               {/* Log de previsões */}
-              <div id="pv-log" className="pv-log" ref={pvLogRef}></div>
+              <div id="pv-log" className="pv-log"></div>
 
               {/* Histórico de temas */}
               <div className="pv-history">
                 <div className="pv-history-head">
                   <span>Histórico de temas analisados</span>
                   <button
+                    id="pv-clear-history"
                     className="linkish"
                     title="Limpar histórico"
                     type="button"
@@ -716,7 +727,7 @@ function App() {
                     limpar
                   </button>
                 </div>
-                <ul id="pv-historico" className="pv-historico" ref={pvHistoricoRef}>
+                <ul id="pv-historico" className="pv-historico">
                   {previsoesState.historicoTemas.map((item, index) => (
                     <li 
                       key={index} 
@@ -771,7 +782,6 @@ function App() {
                     <span
                       id="pv-trend"
                       className="pv-trend"
-                      ref={pvTrendRef}
                     ></span>
                   </div>
                   <div className="pv-legend">
@@ -784,7 +794,7 @@ function App() {
                     <div className="legend-item">
                       <span className="dot dot-mm"></span> Média Móvel
                     </div>
-                    {previsoesState.config.tipoGrafico === 'area' && (
+                    {pvChartType === 'area' && (
                       <div className="legend-item">
                         <span className="dot dot-area"></span> Intensidade do Tema
                       </div>
@@ -796,7 +806,7 @@ function App() {
                 <div className="pv-chart-info">
                   <div className="pv-info-item">
                     <span className="pv-info-label">Período de análise:</span>
-                    <span className="pv-info-value">{previsoesState.config.periodo.toUpperCase()}</span>
+                    <span className="pv-info-value">{pvPeriodo.toUpperCase()}</span>
                   </div>
                   <div className="pv-info-item">
                     <span className="pv-info-label">Previsão:</span>
@@ -812,7 +822,7 @@ function App() {
                   </div>
                 </div>
 
-                <div className="pv-stats" ref={pvStatsBoxRef}></div>
+                <div className="pv-stats"></div>
                 
                 {/* Container do gráfico Canvas */}
                 <div className="pv-chart-container">
@@ -828,7 +838,7 @@ function App() {
                 <div className="pv-insights">
                   <h4>📈 Insights da IA</h4>
                   <div id="pv-insights-content">
-                    {previsoesState.insights.length > 0 ? (
+                    {previsoesState.insights?.length > 0 ? (
                       <ul>
                         {previsoesState.insights.map((insight, idx) => (
                           <li key={idx}>{insight}</li>
@@ -847,7 +857,7 @@ function App() {
                 <div className="pv-card-title">
                   📰 Artigos e Fontes Analisadas
                   <span className="pv-articles-count" id="pv-articles-count">
-                    {previsoesState.artigos.length > 0 
+                    {previsoesState.artigos?.length > 0 
                       ? ` (${previsoesState.artigos.length})` 
                       : ''}
                   </span>
@@ -855,7 +865,6 @@ function App() {
                 <div
                   id="pv-articles"
                   className="pv-articles"
-                  ref={pvArticlesRef}
                 ></div>
               </div>
             </div>

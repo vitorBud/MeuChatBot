@@ -1,10 +1,10 @@
 // ============================================================================
-// OrionAI — Módulo de Previsões Anuais (Versão Corrigida)
+// OrionAI — Módulo de Previsões Anuais
 // ============================================================================
 
 import Chart from 'chart.js/auto';
 
-// NOVO: Configurações de gráfico por tipo - CORRIGIDO
+// Configurações de gráfico por tipo
 const CHART_CONFIGS = {
   linha: {
     type: 'line',
@@ -64,15 +64,12 @@ export function initPrevisoes() {
     pvLog: $('#pv-log'),
     pvCanvas: $('#pv-canvas'),
     pvArticles: $('#pv-articles'),
-    pvMM: $('#pv-mm'),
-    pvExport: $('#pv-export'),
-    pvLimpar: $('#pv-limpar'),
-    pvHistorico: $('#pv-historico'),
-    pvClearHist: $('#pv-clear-history'),
     pvStatsBox: $('.pv-stats'),
     pvTrend: $('#pv-trend'),
     pvArticlesCount: $('#pv-articles-count'),
-    pvInsightsContent: $('#pv-insights-content')
+    pvInsightsContent: $('#pv-insights-content'),
+    pvHistorico: $('#pv-historico'),
+    pvClearHist: $('#pv-clear-history')
   };
 
   if (!elements.pvForm || !elements.pvCanvas) {
@@ -80,7 +77,7 @@ export function initPrevisoes() {
     return;
   }
 
-  // ---------- Estado ATUALIZADO para ANUAL ----------
+  // ---------- Estado ----------
   const state = {
     periodo: 'anual', // 'anual', 'trimestral', 'mensal'
     temaAtual: '',
@@ -92,15 +89,12 @@ export function initPrevisoes() {
     histKey: 'pv_history_anual_v1',
     history: [],
     lastPrediction: null,
-    forecastMonths: 12, // Previsão para 12 meses
-    // artigos
+    forecastMonths: 12,
     allArticles: [],
     pageSize: 8,
     pageIndex: 0,
-    // cache
     cache: new Map(),
     cacheTTL: 120000,
-    // insights
     insights: []
   };
 
@@ -109,33 +103,42 @@ export function initPrevisoes() {
     try {
       localStorage.setItem(state.prefsKey, JSON.stringify({
         periodo: state.periodo,
-        useMA: !!elements.pvMM?.checked,
         chartType: state.chartType
       }));
-    } catch { }
+    } catch (err) {
+      console.warn('[previsoes] Erro ao salvar preferências:', err);
+    }
   };
 
   const loadPrefs = () => {
     try {
       const raw = localStorage.getItem(state.prefsKey);
       if (raw) {
-        const { periodo, useMA, chartType } = JSON.parse(raw);
+        const { periodo, chartType } = JSON.parse(raw);
         if (['anual', 'trimestral', 'mensal'].includes(periodo)) state.periodo = periodo;
-        if (typeof useMA === 'boolean' && elements.pvMM) elements.pvMM.checked = useMA;
         if (['linha', 'area', 'barras'].includes(chartType)) state.chartType = chartType;
       }
-    } catch { }
+    } catch (err) {
+      console.warn('[previsoes] Erro ao carregar preferências:', err);
+    }
   };
 
   // ---------- Histórico ----------
   const loadHistory = () => {
     try {
       state.history = JSON.parse(localStorage.getItem(state.histKey)) || [];
-    } catch { state.history = []; }
+    } catch (err) {
+      console.warn('[previsoes] Erro ao carregar histórico:', err);
+      state.history = [];
+    }
   };
   
   const saveHistory = () => {
-    try { localStorage.setItem(state.histKey, JSON.stringify(state.history)); } catch { }
+    try { 
+      localStorage.setItem(state.histKey, JSON.stringify(state.history)); 
+    } catch (err) {
+      console.warn('[previsoes] Erro ao salvar histórico:', err);
+    }
   };
   
   const addHistory = (tema) => {
@@ -153,17 +156,18 @@ export function initPrevisoes() {
     elements.pvHistorico.innerHTML = '';
     state.history.forEach(item => {
       const li = document.createElement('li');
+      li.className = 'pv-h-item';
       const date = new Date(item.at).toLocaleString('pt-BR');
       li.innerHTML = `
         <div class="pv-h-item-title">${item.tema}</div>
         <div class="pv-h-item-date">${date} • ${item.periodo.toUpperCase()}</div>
       `;
       li.addEventListener('click', () => {
-        // Também atualizar o período se estiver no histórico
         if (item.periodo && item.periodo !== state.periodo) {
           state.periodo = item.periodo;
           savePrefs();
           updatePeriodoUI();
+          updateChartTypeUI();
         }
         submitTema(item.tema);
       });
@@ -171,11 +175,13 @@ export function initPrevisoes() {
     });
   };
   
-  elements.pvClearHist?.addEventListener('click', () => {
-    state.history = [];
-    saveHistory();
-    renderHistory();
-  });
+  if (elements.pvClearHist) {
+    elements.pvClearHist.addEventListener('click', () => {
+      state.history = [];
+      saveHistory();
+      renderHistory();
+    });
+  }
 
   // ---------- Utils ----------
   const pvAdd = (text, role = 'bot') => {
@@ -187,20 +193,18 @@ export function initPrevisoes() {
     elements.pvLog.scrollTop = elements.pvLog.scrollHeight;
   };
 
-  // NOVO: Gerar dados anuais simulados
+  // Gerar dados anuais simulados
   const generateAnnualData = (baseValue, trendValue, months = 12) => {
     const data = [];
     const today = new Date();
     
-    // Histórico: últimos 12 meses
     for (let i = 11; i >= 0; i--) {
       const date = new Date(today);
       date.setMonth(date.getMonth() - i);
       
-      // Valor base + sazonalidade + ruído
-      const seasonal = Math.sin(i * 0.5) * 0.3; // Sazonalidade anual
-      const noise = (Math.random() - 0.5) * 0.2; // Ruído aleatório
-      const trend = (trendValue / 100) * (i / 11); // Tendência gradual
+      const seasonal = Math.sin(i * 0.5) * 0.3;
+      const noise = (Math.random() - 0.5) * 0.2;
+      const trend = (trendValue / 100) * (i / 11);
       
       const value = baseValue * (1 + seasonal + noise + trend);
       
@@ -214,7 +218,7 @@ export function initPrevisoes() {
     return data;
   };
 
-  // NOVO: Gerar previsão anual
+  // Gerar previsão anual
   const generateAnnualForecast = (historicalData, trendValue, months = 12) => {
     const forecast = [];
     const lastHistorical = historicalData[historicalData.length - 1];
@@ -224,16 +228,9 @@ export function initPrevisoes() {
       const date = new Date(lastDate);
       date.setMonth(date.getMonth() + i);
       
-      // Base no último valor histórico
       const base = lastHistorical.count;
-      
-      // Sazonalidade projetada
       const seasonal = Math.sin((11 + i) * 0.5) * 0.3;
-      
-      // Tendência aplicada
       const trend = (trendValue / 100) * (i / 12);
-      
-      // Ruído reduzido para previsão
       const noise = (Math.random() - 0.5) * 0.1;
       
       const value = base * (1 + seasonal + trend + noise);
@@ -248,18 +245,18 @@ export function initPrevisoes() {
     return forecast;
   };
 
-  // NOVO: Gerar insights para análise anual
+  // Gerar insights
   const generateAnnualInsights = (historical, forecast, trendValue) => {
     const insights = [];
     
-    if (!historical || !forecast) return insights;
+    if (!historical || !forecast || historical.length === 0 || forecast.length === 0) {
+      return insights;
+    }
     
-    // Calcular métricas
     const historicalAvg = historical.reduce((sum, p) => sum + p.count, 0) / historical.length;
     const forecastAvg = forecast.reduce((sum, p) => sum + p.count, 0) / forecast.length;
     const changePercent = ((forecastAvg - historicalAvg) / historicalAvg) * 100;
     
-    // Insight 1: Tendência geral
     if (Math.abs(changePercent) > 20) {
       insights.push(
         `📈 Tendência ${changePercent > 0 ? 'fortemente positiva' : 'fortemente negativa'} ` +
@@ -274,12 +271,9 @@ export function initPrevisoes() {
       insights.push('⚖️ Estabilidade prevista para os próximos 12 meses');
     }
     
-    // Insight 2: Sazonalidade
     const monthlyPatterns = [];
-    for (let i = 0; i < 12; i++) {
-      if (i < historical.length) {
-        monthlyPatterns.push(historical[i].count);
-      }
+    for (let i = 0; i < Math.min(12, historical.length); i++) {
+      monthlyPatterns.push(historical[i].count);
     }
     
     const variance = Math.sqrt(
@@ -292,7 +286,6 @@ export function initPrevisoes() {
       insights.push('📅 Sazonalidade moderada - variações previsíveis ao longo do ano');
     }
     
-    // Insight 3: Baseado no sentimento
     if (trendValue > 30) {
       insights.push('🚀 Sentimento muito positivo nas notícias - crescimento acelerado esperado');
     } else if (trendValue > 15) {
@@ -303,13 +296,14 @@ export function initPrevisoes() {
       insights.push('📉 Sentimento negativo - declínio moderado');
     }
     
-    // Insight 4: Período de pico
     const maxMonth = forecast.reduce((max, point, idx) => 
       point.count > forecast[max].count ? idx : max, 0
     );
     
     const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dec'];
-    insights.push(`📅 Maior destaque previsto para ${monthNames[maxMonth % 12]}`);
+    if (forecast.length > 0) {
+      insights.push(`📅 Maior destaque previsto para ${monthNames[maxMonth % 12]}`);
+    }
     
     return insights;
   };
@@ -325,16 +319,22 @@ export function initPrevisoes() {
     return out;
   };
 
-  // ---------- NOVO: Atualizar UI do período ----------
+  // ---------- UI Updates ----------
   const updatePeriodoUI = () => {
-    const periodoBtns = document.querySelectorAll('.pv-segment[aria-label="Período de análise"] .seg-btn');
+    const periodoBtns = document.querySelectorAll('[data-periodo]');
     periodoBtns.forEach(btn => {
-      const periodo = btn.textContent.toLowerCase();
-      btn.classList.toggle('active', periodo === state.periodo);
+      btn.classList.toggle('active', btn.dataset.periodo === state.periodo);
     });
   };
 
-  // ---------- Renderizar gráfico ANUAL corrigido ----------
+  const updateChartTypeUI = () => {
+    const chartTypeBtns = document.querySelectorAll('[data-chart-type]');
+    chartTypeBtns.forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.chartType === state.chartType);
+    });
+  };
+
+  // ---------- Renderizar gráfico ----------
   let renderLock = false;
   let ro = null;
 
@@ -348,7 +348,6 @@ export function initPrevisoes() {
       ro = null; 
     }
   };
-
 
   const resizeCanvasToContainer = () => {
     const canvas = elements.pvCanvas;
@@ -373,9 +372,6 @@ export function initPrevisoes() {
     ctx.scale(dpr, dpr);
   };
 
-
-
-
   const renderChart = (series, forecast = []) => {
     if (!elements.pvCanvas || renderLock) return;
     renderLock = true;
@@ -383,8 +379,7 @@ export function initPrevisoes() {
     try {
       const allData = [...series, ...forecast];
       
-      // Labels baseados no período
-      const labels = allData.map((point, idx) => {
+      const labels = allData.map((point) => {
         const date = new Date(point.date);
         if (state.periodo === 'mensal') {
           return date.toLocaleDateString('pt-BR', { month: 'short' });
@@ -392,7 +387,6 @@ export function initPrevisoes() {
           const quarter = Math.floor(date.getMonth() / 3) + 1;
           return `T${quarter}/${date.getFullYear().toString().slice(-2)}`;
         } else {
-          // Anual
           return date.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
         }
       });
@@ -404,13 +398,10 @@ export function initPrevisoes() {
       destroyChart();
       const ctx = elements.pvCanvas.getContext('2d');
       
-      // Configuração base
       const chartConfig = CHART_CONFIGS[state.chartType] || CHART_CONFIGS.linha;
       
-      // Preparar datasets
       const datasets = [];
       
-      // Dataset histórico
       datasets.push({
         label: 'Dados Históricos',
         data: counts.map((count, i) => isForecastArr[i] ? null : count),
@@ -433,7 +424,6 @@ export function initPrevisoes() {
         })
       });
       
-      // Dataset previsão
       datasets.push({
         label: 'Previsão OrionAI',
         data: counts.map((count, i) => isForecastArr[i] ? count : null),
@@ -456,8 +446,8 @@ export function initPrevisoes() {
         })
       });
 
-      // Adicionar média móvel se ativada
-      if (elements.pvMM?.checked) {
+      const maCheckbox = document.getElementById('pv-mm-checkbox');
+      if (maCheckbox?.checked) {
         datasets.push({
           label: 'Média Móvel',
           data: movingAverage(historicalCounts, 3).map((val, i) => isForecastArr[i] ? null : val),
@@ -472,7 +462,6 @@ export function initPrevisoes() {
         });
       }
 
-      // Opções do gráfico
       const options = {
         responsive: true,
         maintainAspectRatio: false,
@@ -581,7 +570,6 @@ export function initPrevisoes() {
         }
       };
 
-      // Ajustes específicos por tipo
       if (state.chartType === 'barras') {
         options.scales.x.offset = true;
         options.scales.x.grid.display = false;
@@ -598,19 +586,16 @@ export function initPrevisoes() {
         options
       });
 
-      // Observador de redimensionamento
       ro = new ResizeObserver(() => {
         resizeCanvasToContainer();
         state.chart?.resize();
       });
 
       const container = elements.pvCanvas.parentElement;
-        if (container) {
-          ro.observe(container);
-        }
+      if (container) {
+        ro.observe(container);
+      }
 
-
-      // Atualizar insights
       state.insights = generateAnnualInsights(series, forecast, state.lastPrediction?.trendValue || 0);
       updateInsightsUI();
 
@@ -621,7 +606,6 @@ export function initPrevisoes() {
     }
   };
 
-  // Atualizar UI de insights
   const updateInsightsUI = () => {
     if (!elements.pvInsightsContent) return;
     
@@ -643,28 +627,23 @@ export function initPrevisoes() {
   const updateTrendBadge = (trendValue) => {
     if (!elements.pvTrend) return;
 
-    let direction = 'flat';
     let arrow = '→';
     let label = 'Estável';
     let color = '#8e8e93';
 
     if (trendValue > 15) {
-      direction = 'up';
       arrow = '↗';
       label = 'Forte Alta';
       color = '#34c759';
     } else if (trendValue > 5) {
-      direction = 'up';
       arrow = '↗';
       label = 'Em Alta';
       color = '#30d158';
     } else if (trendValue < -15) {
-      direction = 'down';
       arrow = '↘';
       label = 'Forte Baixa';
       color = '#ff3b30';
     } else if (trendValue < -5) {
-      direction = 'down';
       arrow = '↘';
       label = 'Em Baixa';
       color = '#ff453a';
@@ -673,11 +652,10 @@ export function initPrevisoes() {
     const valueStr = isNaN(trendValue) ? '' : ` (${Math.abs(trendValue).toFixed(1)}%)`;
 
     elements.pvTrend.textContent = `${arrow} ${label}${valueStr}`;
-    elements.pvTrend.dataset.direction = direction;
     elements.pvTrend.style.color = color;
   };
 
-  // ---------- Stats Inteligentes ----------
+  // ---------- Stats ----------
   const updateStatsWithBackendData = (data) => {
     if (!elements.pvStatsBox) return;
     
@@ -686,7 +664,6 @@ export function initPrevisoes() {
     const sentiment = contentAnalysis.sentimento_medio || 0;
     const temas = contentAnalysis.temas_detectados || [];
 
-    // Limpar e criar stats
     elements.pvStatsBox.innerHTML = '';
 
     const blocks = [
@@ -756,74 +733,35 @@ export function initPrevisoes() {
     if (elements.pvStatsBox) elements.pvStatsBox.innerHTML = '';
     if (elements.pvTrend) {
       elements.pvTrend.textContent = '';
-      elements.pvTrend.dataset.direction = '';
     }
     if (elements.pvArticlesCount) {
       elements.pvArticlesCount.textContent = '';
     }
     updateInsightsUI();
+    
+    // Notificar React
+    if (window.__previsoesDebug?.onTemaChange) {
+      window.__previsoesDebug.onTemaChange('', false);
+    }
   };
 
-  // ---------- Export ----------
-  elements.pvExport?.addEventListener('click', () => {
-    if (!state.series.length) return;
-
-    const header = 'data,periodo,tipo,valor,unidade\n';
-    const historicalRows = state.series.map(p => 
-      `${p.date},${state.periodo},histórico,${p.count},menções`
-    ).join('\n');
-    
-    const forecastRows = state.lastPrediction?.forecast?.map(p => 
-      `${p.date},${state.periodo},previsão,${p.count},menções`
-    ).join('\n') || '';
-
-    const rows = forecastRows ? historicalRows + '\n' + forecastRows : historicalRows;
-    const blob = new Blob([header + rows], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    const temaSlug = (state.temaAtual || 'analise_anual').toLowerCase().replace(/[^\w\-]+/g, '-');
-    a.href = url; 
-    a.download = `${temaSlug}-${state.periodo}-previsao.csv`;
-    document.body.appendChild(a); 
-    a.click(); 
-    a.remove();
-    URL.revokeObjectURL(url);
-  });
-
-  // ---------- Event Listeners ----------
-  elements.pvMM?.addEventListener('change', () => {
-    savePrefs();
-    if (state.series.length) {
-      renderChart(state.series, state.lastPrediction?.forecast || []);
-    }
-  });
-  
-  elements.pvLimpar?.addEventListener('click', clearUI);
-
-  // NOVO: Listener para mudança de tipo de gráfico - CORRIGIDO
+  // ---------- Event Handlers ----------
   const handleChartTypeClick = (e) => {
     const btn = e.target.closest('[data-chart-type]');
     if (!btn) return;
     
     const newType = btn.dataset.chartType;
     if (['linha', 'area', 'barras'].includes(newType) && newType !== state.chartType) {
-      // Atualizar estado
       state.chartType = newType;
       savePrefs();
+      updateChartTypeUI();
       
-      // Atualizar UI dos botões
-      document.querySelectorAll('[data-chart-type]').forEach(b => {
-        b.classList.toggle('active', b.dataset.chartType === newType);
-      });
-      
-      // Re-renderizar gráfico se houver dados
       if (state.series.length) {
         renderChart(state.series, state.lastPrediction?.forecast || []);
       }
     }
   };
 
-  // NOVO: Listener para mudança de período
   const handlePeriodoClick = (e) => {
     const btn = e.target.closest('[data-periodo]');
     if (!btn) return;
@@ -832,11 +770,12 @@ export function initPrevisoes() {
     if (['anual', 'trimestral', 'mensal'].includes(newPeriodo) && newPeriodo !== state.periodo) {
       state.periodo = newPeriodo;
       savePrefs();
-      
-      // Atualizar UI
       updatePeriodoUI();
       
-      // Se houver tema atual, re-analisar com novo período
+      if (window.__previsoesDebug?.onPeriodoChange) {
+        window.__previsoesDebug.onPeriodoChange(newPeriodo);
+      }
+      
       if (state.temaAtual) {
         submitTema(state.temaAtual);
       }
@@ -920,7 +859,6 @@ export function initPrevisoes() {
       `;
     }).join('') || '<div class="pv-no-articles">Nenhum artigo encontrado neste período.</div>';
 
-    // Atualizar contador
     if (elements.pvArticlesCount) {
       elements.pvArticlesCount.textContent = state.allArticles.length > 0 ? ` (${state.allArticles.length})` : '';
     }
@@ -946,7 +884,7 @@ export function initPrevisoes() {
     }
   };
 
-  // ---------- Fluxo principal ANUAL ----------
+  // ---------- Fluxo principal ----------
   const submitTema = async (temaOpt) => {
     const value = (temaOpt || elements.pvTema?.value || '').trim();
     if (!value) return;
@@ -967,7 +905,7 @@ export function initPrevisoes() {
     try {
       const body = { 
         tema: value, 
-        periodo: state.periodo, // Mudado de 'dias' para 'periodo'
+        periodo: state.periodo,
         tipo: 'anual' 
       };
       const key = cacheKey(value, state.periodo);
@@ -998,7 +936,6 @@ export function initPrevisoes() {
       const contentAnalysis = data.content_analysis || {};
       const sentimentScore = Number(contentAnalysis.sentimento_medio ?? 0);
 
-      // Calcular tendência baseada no sentimento
       let trendValue = 0;
       if (sentimentScore >= 0.3) {
         trendValue = 40;
@@ -1014,8 +951,7 @@ export function initPrevisoes() {
         trendValue = -10;
       }
 
-      // Gerar dados anuais
-      const baseValue = 50 + Math.random() * 30; // Valor base aleatório
+      const baseValue = 50 + Math.random() * 30;
       const historical = generateAnnualData(baseValue, trendValue);
       const forecast = generateAnnualForecast(historical, trendValue, state.forecastMonths);
       
@@ -1028,7 +964,6 @@ export function initPrevisoes() {
         trendValue: trendValue
       };
 
-      // Mensagem de previsão
       const trendText = trendValue > 20 ? 'forte crescimento' :
                        trendValue > 10 ? 'crescimento moderado' :
                        trendValue > 0 ? 'leve crescimento' :
@@ -1043,7 +978,6 @@ export function initPrevisoes() {
       
       pvAdd(`Bot: ${previsaoText}`, 'bot');
       
-      // Renderizar gráfico
       renderChart(historical, forecast);
       resizeCanvasToContainer();
 
@@ -1051,17 +985,18 @@ export function initPrevisoes() {
         resizeCanvasToContainer();
         state.chart.resize();
       });
-
-
       
-      // Atualizar stats
       updateStatsWithBackendData(data);
       updateTrendBadge(trendValue);
 
-      // Atualizar artigos
       state.allArticles = Array.isArray(data.artigos) ? data.artigos : [];
       state.pageIndex = 0;
       renderArticles();
+
+      // Notificar React que terminou de carregar
+      if (window.__previsoesDebug?.onTemaChange) {
+        window.__previsoesDebug.onTemaChange(value, false);
+      }
 
     } catch (err) {
       if (err?.name === 'AbortError') {
@@ -1070,6 +1005,10 @@ export function initPrevisoes() {
         console.error('[previsoes] Erro:', err);
         pvAdd('Bot: erro ao consultar o servidor de previsões.', 'bot');
       }
+      // Notificar React que houve erro
+      if (window.__previsoesDebug?.onTemaChange) {
+        window.__previsoesDebug.onTemaChange(state.temaAtual, false);
+      }
     } finally {
       if (submitBtn) submitBtn.disabled = false;
       if (state.inFlight === controller) state.inFlight = null;
@@ -1077,6 +1016,120 @@ export function initPrevisoes() {
     }
   };
 
+  // ---------- Inicialização ----------
+  const initControls = () => {
+    const pvActions = document.querySelector('.pv-actions');
+    if (!pvActions) return;
+    
+    pvActions.innerHTML = '';
+    
+    // Botões de período
+    const periodoDiv = document.createElement('div');
+    periodoDiv.className = 'pv-segment';
+    periodoDiv.setAttribute('role', 'group');
+    periodoDiv.setAttribute('aria-label', 'Período de análise');
+    periodoDiv.innerHTML = `
+      <button class="seg-btn ${state.periodo === 'mensal' ? 'active' : ''}" 
+              data-periodo="mensal" type="button">
+        Mensal
+      </button>
+      <button class="seg-btn ${state.periodo === 'trimestral' ? 'active' : ''}" 
+              data-periodo="trimestral" type="button">
+        Trimestral
+      </button>
+      <button class="seg-btn ${state.periodo === 'anual' ? 'active' : ''}" 
+              data-periodo="anual" type="button">
+        Anual
+      </button>
+    `;
+    periodoDiv.addEventListener('click', handlePeriodoClick);
+    pvActions.appendChild(periodoDiv);
+    
+    // Botões de tipo de gráfico
+    const chartTypeDiv = document.createElement('div');
+    chartTypeDiv.className = 'pv-segment pv-chart-types';
+    chartTypeDiv.setAttribute('role', 'group');
+    chartTypeDiv.setAttribute('aria-label', 'Tipo de visualização');
+    chartTypeDiv.innerHTML = `
+      <button class="seg-btn ${state.chartType === 'linha' ? 'active' : ''}" 
+              data-chart-type="linha" type="button">
+        Linha
+      </button>
+      <button class="seg-btn ${state.chartType === 'area' ? 'active' : ''}" 
+              data-chart-type="area" type="button">
+        Área
+      </button>
+      <button class="seg-btn ${state.chartType === 'barras' ? 'active' : ''}" 
+              data-chart-type="barras" type="button">
+        Barras
+      </button>
+    `;
+    chartTypeDiv.addEventListener('click', handleChartTypeClick);
+    pvActions.appendChild(chartTypeDiv);
+    
+    // Checkbox de média móvel
+    const toggleLabel = document.createElement('label');
+    toggleLabel.className = 'pv-toggle';
+    toggleLabel.innerHTML = `
+      <input type="checkbox" id="pv-mm-checkbox" checked>
+      <span>Média móvel</span>
+    `;
+    
+    const checkbox = toggleLabel.querySelector('#pv-mm-checkbox');
+    if (checkbox) {
+      checkbox.addEventListener('change', () => {
+        if (state.series.length) {
+          renderChart(state.series, state.lastPrediction?.forecast || []);
+        }
+      });
+    }
+    pvActions.appendChild(toggleLabel);
+    
+    // Botão Exportar
+    const exportBtn = document.createElement('button');
+    exportBtn.id = 'pv-export';
+    exportBtn.className = 'btn soft';
+    exportBtn.title = 'Exportar CSV';
+    exportBtn.type = 'button';
+    exportBtn.textContent = 'Exportar';
+    exportBtn.addEventListener('click', () => {
+      if (!state.series.length) return;
+
+      const header = 'data,periodo,tipo,valor,unidade\n';
+      const historicalRows = state.series.map(p => 
+        `${p.date},${state.periodo},histórico,${p.count},menções`
+      ).join('\n');
+      
+      const forecastRows = state.lastPrediction?.forecast?.map(p => 
+        `${p.date},${state.periodo},previsão,${p.count},menções`
+      ).join('\n') || '';
+
+      const rows = forecastRows ? historicalRows + '\n' + forecastRows : historicalRows;
+      const blob = new Blob([header + rows], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const temaSlug = (state.temaAtual || 'analise_anual').toLowerCase().replace(/[^\w\-]+/g, '-');
+      a.href = url; 
+      a.download = `${temaSlug}-${state.periodo}-previsao.csv`;
+      document.body.appendChild(a); 
+      a.click(); 
+      a.remove();
+      URL.revokeObjectURL(url);
+    });
+    pvActions.appendChild(exportBtn);
+    
+    // Botão Limpar
+    const clearBtn = document.createElement('button');
+    clearBtn.id = 'pv-limpar';
+    clearBtn.className = 'btn outline';
+    clearBtn.title = 'Limpar dashboard';
+    clearBtn.type = 'button';
+    clearBtn.textContent = 'Limpar';
+    clearBtn.addEventListener('click', clearUI);
+    pvActions.appendChild(clearBtn);
+  };
+
+  // Event Listeners
   elements.pvForm.addEventListener('submit', (e) => {
     e.preventDefault();
     submitTema();
@@ -1094,77 +1147,19 @@ export function initPrevisoes() {
   loadPrefs();
   loadHistory();
   renderHistory();
-
-  // NOVO: Adicionar botões de tipo de gráfico dinamicamente - CORRIGIDO
-  setTimeout(() => {
-    const pvActions = document.querySelector('.pv-actions');
-    
-    // 1. Adicionar botões de tipo de gráfico
-    const existingChartTypes = document.querySelector('.pv-chart-types');
-    if (!existingChartTypes && pvActions) {
-      const chartTypeDiv = document.createElement('div');
-      chartTypeDiv.className = 'pv-segment pv-chart-types';
-      chartTypeDiv.setAttribute('role', 'group');
-      chartTypeDiv.setAttribute('aria-label', 'Tipo de visualização');
-      chartTypeDiv.innerHTML = `
-        <button class="seg-btn ${state.chartType === 'linha' ? 'active' : ''}" 
-                data-chart-type="linha" type="button">
-          Linha
-        </button>
-        <button class="seg-btn ${state.chartType === 'area' ? 'active' : ''}" 
-                data-chart-type="area" type="button">
-          Área
-        </button>
-        <button class="seg-btn ${state.chartType === 'barras' ? 'active' : ''}" 
-                data-chart-type="barras" type="button">
-          Barras
-        </button>
-      `;
-      
-      // Inserir após os botões de período
-      const periodoGroup = pvActions.querySelector('[aria-label="Período de análise"]');
-      if (periodoGroup) {
-        pvActions.insertBefore(chartTypeDiv, periodoGroup.nextSibling);
-      } else {
-        pvActions.insertBefore(chartTypeDiv, pvActions.firstChild);
-      }
-      
-      // Adicionar event listener
-      chartTypeDiv.addEventListener('click', handleChartTypeClick);
-    }
-    
-    // 2. Adicionar data-periodo aos botões existentes
-    const periodoBtns = document.querySelectorAll('[aria-label="Período de análise"] .seg-btn');
-    periodoBtns.forEach((btn, idx) => {
-      const periodos = ['mensal', 'trimestral', 'anual'];
-      if (idx < periodos.length) {
-        btn.dataset.periodo = periodos[idx];
-        btn.classList.toggle('active', periodos[idx] === state.periodo);
-      }
-    });
-    
-    // Adicionar event listener para período
-    const periodoGroup = document.querySelector('[aria-label="Período de análise"]');
-    if (periodoGroup) {
-      periodoGroup.addEventListener('click', handlePeriodoClick);
-    }
-    
-  }, 150);
+  
+  // Inicializar controles
+  setTimeout(initControls, 100);
 
   // Expor funções para debug e controle
   window.__previsoesDebug = {
     submitTema,
-    renderChart,
     getState: () => ({ ...state }),
     setChartType: (type) => {
       if (['linha', 'area', 'barras'].includes(type)) {
         state.chartType = type;
         savePrefs();
-        
-        // Atualizar UI
-        document.querySelectorAll('[data-chart-type]').forEach(btn => {
-          btn.classList.toggle('active', btn.dataset.chartType === type);
-        });
+        updateChartTypeUI();
         
         if (state.series.length) {
           renderChart(state.series, state.lastPrediction?.forecast || []);
@@ -1176,8 +1171,15 @@ export function initPrevisoes() {
         state.periodo = periodo;
         savePrefs();
         updatePeriodoUI();
+        
+        if (window.__previsoesDebug?.onPeriodoChange) {
+          window.__previsoesDebug.onPeriodoChange(periodo);
+        }
       }
-    }
+    },
+    clearUI: () => clearUI(),
+    onPeriodoChange: null,
+    onTemaChange: null
   };
 
   // Error handling
